@@ -41,7 +41,9 @@ export default {
 	},
 	methods: {
 		emitChange() {
-			this.$emit('input', { detailLevel: this.detailLevel, usePrev: this.usePrev })
+			const payload = { detailLevel: this.detailLevel, usePrev: this.usePrev }
+			this.$emit('input', payload)
+			this.$emit('change', payload)
 		},
 	},
 }

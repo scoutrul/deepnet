@@ -9,10 +9,12 @@ const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || import.meta.env.VITE_
 
 export const chatService = {
 	async ask(question: string, opts?: { usePreviousContext?: boolean; previousAssistantText?: string; detailLevel?: 'short' | 'extended' | 'max' }): Promise<{ raw: string; parsed: ParsedResponse | null }> {
-		const systemPrompt = buildSystemPrompt(opts?.detailLevel)
+		const level = opts?.detailLevel || 'extended'
+		const systemPrompt = buildSystemPrompt(level)
+		const { temperature, maxTokens } = tuningByLevel(level)
 
 		if (!API_KEY) {
-			const mock = buildMockResponse(question)
+			const mock = buildMockResponse(question, level)
 			return { raw: JSON.stringify(mock), parsed: mock }
 		}
 
@@ -24,8 +26,8 @@ export const chatService = {
 			apiKey: API_KEY,
 			apiBaseUrl: BASE_URL,
 			title: import.meta.env.VITE_APP_TITLE || 'DeepNet Encyclopedia',
-			temperature: 0.7,
-			maxTokens: 500,
+			temperature,
+			maxTokens,
 			previousAssistantContent: opts?.usePreviousContext ? (opts?.previousAssistantText || '') : undefined,
 		})
 		const parsed = parseToUiModel(raw)
@@ -33,38 +35,25 @@ export const chatService = {
 	},
 }
 
-function buildSystemPrompt(level: 'short' | 'extended' | 'max' = 'extended'): string {
-	const levelHint = level === 'short' ? 'Дай максимально краткий ответ.' : level === 'max' ? 'Дай максимально полный ответ.' : 'Дай сбалансированный ответ.'
-	return `Ты — интерактивный чат-помощник «Энциклопедия Погружение». Твоя цель — помогать пользователю быстро погружаться в любую техническую тему через короткие, понятные ответы.
-
-${levelHint}
-
-Правила работы:
-1. Отвечай коротко: 2–3 предложения максимум.
-2. Выделяй ключевые термины/фразы, которые имеют смысловую нагрузку и могут быть интерактивными.
-3. После каждого ответа предоставляй список сопутствующих терминов и технологий.
-4. Все ответы должны быть контекстно связаны с предыдущими вопросами и ответами пользователя.
-5. Стиль — ясный, технический, без лишней воды.
-6. Если пользователь выбирает термин из списка, давай новый короткий ответ по выбранному термину, снова с сопутствующими терминами.
-7. Ключевые термины должны быть осмысленными, а не каждое отдельное слово.
-
-Формат ответа (JSON):
-{
-  "text": "<короткий текст с выделенными терминами>",
-  "terms": [
-    {"text": "<термин>", "info": "<короткое объяснение или ссылка>"},
-    {"text": "<термин>", "info": "<короткое объяснение или ссылка>"}
-  ]
-}`
+function tuningByLevel(level: 'short' | 'extended' | 'max') {
+	if (level === 'short') return { temperature: 0.3, maxTokens: 350 }
+	if (level === 'max') return { temperature: 0.7, maxTokens: 1200 }
+	return { temperature: 0.5, maxTokens: 700 }
 }
 
-function buildMockResponse(question: string): ParsedResponse {
+function buildSystemPrompt(level: 'short' | 'extended' | 'max' = 'extended'): string {
+	const levelHint = level === 'short' ? 'Дай максимально краткий ответ.' : level === 'max' ? 'Дай максимально полный ответ.' : 'Дай сбалансированный ответ.'
+	return `Ты — интерактивный чат-помощник «Энциклопедия Погружение». Твоя цель — помогать пользователю быстро погружаться в любую техническую тему через короткие, понятные ответы.\n\n${levelHint}\n\nПравила работы:\n1. Отвечай коротко: 2–3 предложения максимум.\n2. Выделяй ключевые термины/фразы, которые имеют смысловую нагрузку и могут быть интерактивными.\n3. После каждого ответа предоставляй список сопутствующих терминов и технологий.\n4. Все ответы должны быть контекстно связаны с предыдущими вопросами и ответами пользователя.\n5. Стиль — ясный, технический, без лишней воды.\n6. Если пользователь выбирает термин из списка, давай новый короткий ответ по выбранному термину, снова с сопутствующими терминами.\n7. Ключевые термины должны быть осмысленными, а не каждое отдельное слово.\n\nФормат ответа (JSON):\n{\n  \"text\": \"<короткий текст с выделенными терминами>\",\n  \"terms\": [\n    {\"text\": \"<термин>\", \"info\": \"<короткое объяснение или ссылка>\"},\n    {\"text\": \"<термин>\", \"info\": \"<короткое объяснение или ссылка>\"}\n  ]\n}`
+}
+
+function buildMockResponse(question: string, level: 'short' | 'extended' | 'max'): ParsedResponse {
 	const baseTerms = [
 		{ text: 'Vue 2 Options API', info: 'Классический способ описания компонентов через объект options.' },
 		{ text: 'Reactivity', info: 'Система реактивности отслеживает зависимости и обновляет DOM.' },
 		{ text: 'Promise chaining', info: 'Последовательная обработка асинхронных операций с помощью then().' },
 		{ text: 'TypeScript', info: 'Статическая типизация для улучшения DX и надёжности.' },
 	]
-	const text = `Коротко по запросу: «${question}». Обратите внимание на Vue 2 Options API, Reactivity и Promise chaining.`
+	const prefix = level === 'short' ? 'Коротко по запросу' : level === 'max' ? 'Максимально подробно по запросу' : 'Развернуто по запросу'
+	const text = `${prefix}: «${question}». Обратите внимание на Vue 2 Options API, Reactivity и Promise chaining.`
 	return { text, terms: baseTerms }
 }

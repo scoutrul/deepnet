@@ -1,12 +1,14 @@
 <template>
 	<form @submit.prevent="submit" class="flex flex-col gap-2">
 		<input
+			ref="input"
 			v-model="text"
 			:type="'text'"
 			:disabled="loading"
 			placeholder="Задайте вопрос..."
 			class="w-full rounded-md border border-slate-300 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
 			@keydown.enter.prevent="submit"
+			@input="onInput"
 		/>
 		<button type="submit" class="btn w-max" :disabled="loading">
 			<span v-if="!loading">Отправить</span>
@@ -22,12 +24,25 @@ export default {
 	data() {
 		return { text: '' }
 	},
+	mounted() {
+		this.focus()
+	},
 	methods: {
+		focus() {
+			this.$nextTick(() => {
+				this.$refs.input && this.$refs.input.focus()
+			})
+		},
+		onInput() {
+			this.$emit('draft-change', this.text)
+		},
 		submit() {
 			const q = this.text.trim()
 			if (!q) return
 			this.$emit('submit', q)
 			this.text = ''
+			this.$emit('draft-change', this.text)
+			this.focus()
 		},
 		appendText(term) {
 			const part = String(term || '').trim()
@@ -39,6 +54,8 @@ export default {
 			} else {
 				this.text = `${this.text}, ${part}`
 			}
+			this.$emit('draft-change', this.text)
+			this.focus()
 		},
 	},
 }

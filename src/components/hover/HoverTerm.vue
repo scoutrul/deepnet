@@ -3,9 +3,10 @@
 		<button
 			ref="btn"
 			type="button"
-			class="badge"
-			@mouseenter="onEnter"
-			@mouseleave="onLeave"
+			:class="[
+				'badge transition-colors',
+				active ? 'opacity-100 bg-indigo-600 text-white' : 'opacity-60 bg-indigo-100 text-indigo-700 hover:opacity-80'
+			]"
 			@click.left.prevent="emitClick"
 			@contextmenu.prevent="emitQueue"
 		>
@@ -21,7 +22,7 @@
 <script>
 export default {
 	name: 'HoverTerm',
-	props: { term: { type: Object, required: true } },
+	props: { term: { type: Object, required: true }, active: { type: Boolean, default: false } },
 	data() {
 		return { open: false, enterTimer: null, leaveTimer: null }
 	},
