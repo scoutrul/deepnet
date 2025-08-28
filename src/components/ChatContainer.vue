@@ -73,7 +73,7 @@ export default {
 				const lastAssistant = [...this.messages].reverse().find(m => m.role === 'assistant' && (m.parsed?.text || m.content))
 				const previousAssistantText = lastAssistant?.parsed?.text || lastAssistant?.content || ''
 				const assistant = await chatService.ask(question, { usePreviousContext: !!opts?.usePrev, previousAssistantText })
-				this.messages.push({ id: uuid(), role: 'assistant', content: assistant.raw, parsed: assistant.parsed, createdAt: Date.now() })
+				this.messages.push({ id: uuid(), role: 'assistant', content: assistant.parsed?.text || assistant.raw, parsed: assistant.parsed, createdAt: Date.now() })
 			} catch (e) {
 				this.messages.push({ id: uuid(), role: 'assistant', content: '', error: e?.message || 'Error', createdAt: Date.now() })
 			} finally {

@@ -1,0 +1,108 @@
+/* Стили для интерактивных терминов */
+.term-highlight {
+	transition: all 0.2s ease-in-out;
+	position: relative;
+}
+
+.term-highlight:hover {
+	background-color: rgba(59, 130, 246, 0.1);
+	border-radius: 4px;
+	padding: 1px 2px;
+	margin: -1px -2px;
+}
+
+.term-highlight:active {
+	transform: scale(0.98);
+}
+
+/* Анимация для активных терминов */
+.term-highlight.active {
+	background-color: rgba(59, 130, 246, 0.2);
+	border-radius: 4px;
+	padding: 1px 2px;
+	margin: -1px -2px;
+}
+
+/* Стили для strong тегов */
+strong {
+	font-weight: 600;
+	color: inherit;
+}
+
+/* Стили для code тегов */
+code {
+	background-color: rgba(0, 0, 0, 0.05);
+	padding: 2px 4px;
+	border-radius: 3px;
+	font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+	font-size: 0.9em;
+}
+
+/* Стили для кнопки повторной отправки */
+.retry-button {
+	transition: all 0.2s ease-in-out;
+}
+
+.retry-button:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.retry-button:active {
+	transform: translateY(0);
+}
+
+/* Стили для кнопки повтора в сообщениях с ошибками */
+.error-retry-button {
+	transition: all 0.2s ease-in-out;
+	background-color: rgb(254 226 226); /* red-100 */
+	color: rgb(185 28 28); /* red-700 */
+}
+
+.error-retry-button:hover {
+	background-color: rgb(254 202 202); /* red-200 */
+	transform: translateY(-1px);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.error-retry-button:active {
+	transform: translateY(0);
+}
+
+/* Стили для кнопки повтора в таймаутах */
+.timeout-message .retry-button {
+	background-color: rgb(254 243 199); /* amber-100 */
+	color: rgb(161 98 7); /* amber-700 */
+	transition: all 0.2s ease-in-out;
+}
+
+.timeout-message .retry-button:hover {
+	background-color: rgb(253 230 138); /* amber-200 */
+	transform: translateY(-1px);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.timeout-message .retry-button:active {
+	transform: translateY(0);
+}
+
+/* Стили для таймаута */
+.timeout-message {
+	border-color: rgb(251 146 60); /* orange-300 */
+	background-color: rgb(255 247 237); /* orange-50 */
+	color: rgb(194 65 12); /* orange-800 */
+}
+
+/* Стили для кнопки уточнения */
+.clarify-button {
+	transition: all 0.2s ease-in-out;
+}
+
+.clarify-button:hover {
+	transform: translateY(-1px);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.clarify-button:active {
+	transform: translateY(0);
+}

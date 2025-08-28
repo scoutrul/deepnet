@@ -27,10 +27,10 @@ VITE_HTTP_REFERRER=http://localhost:5173
 VITE_HTTP_TITLE=DeepNet Encyclopedia
 ```
 
-### 3. Получите OpenAI API ключ
-1. Зайдите на [OpenAI Platform](https://platform.openai.com/)
+### 3. Получите OpenRouter API ключ
+1. Зайдите на [OpenRouter](https://openrouter.ai/)
 2. Создайте аккаунт или войдите
-3. Перейдите в [API Keys](https://platform.openai.com/api-keys)
+3. Перейдите в [API Keys](https://openrouter.ai/keys)
 4. Создайте новый ключ
 5. Скопируйте ключ в `.env`
 
@@ -65,17 +65,17 @@ console.log(import.meta.env.VITE_API_BASE_URL)
 
 ### Для разработки (Development)
 ```bash
-VITE_OPENAI_API_KEY=sk-dev-key-here
-VITE_API_BASE_URL=https://api.openai.com/v1
-VITE_CHAT_MODEL=gpt-4
+VITE_OPENAI_API_KEY=sk-or-dev-key-here
+VITE_API_BASE_URL=https://openrouter.ai/api/v1
+VITE_CHAT_MODEL=gpt-4o
 VITE_HTTP_REFERRER=http://localhost:5173
 ```
 
 ### Для продакшна (Production)
 ```bash
-VITE_OPENAI_API_KEY=sk-prod-key-here
-VITE_API_BASE_URL=https://api.openai.com/v1
-VITE_CHAT_MODEL=gpt-4
+VITE_OPENAI_API_KEY=sk-or-prod-key-here
+VITE_API_BASE_URL=https://openrouter.ai/api/v1
+VITE_CHAT_MODEL=gpt-4o
 VITE_APP_TITLE=DeepNet Encyclopedia
 ```
 
