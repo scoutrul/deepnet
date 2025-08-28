@@ -1,21 +1,20 @@
 import type { ParsedResponse, InteractiveTerm } from '@/types/ai'
 
 export function parseToUiModel(raw: string): ParsedResponse | null {
-	console.log('🔍 Parsing response:', raw.substring(0, 200) + '...')
+
 	
 	// Очищаем от markdown разметки (```json ... ```)
 	let cleanRaw = raw.trim()
-	console.log('🔍 Raw starts with:', cleanRaw.substring(0, 10))
-	console.log('🔍 Raw ends with:', cleanRaw.length > 10 ? cleanRaw.substring(cleanRaw.length - 10) : cleanRaw)
+
 	
 	if (cleanRaw.startsWith('```json') && cleanRaw.endsWith('```')) {
 		cleanRaw = cleanRaw.slice(7, -3).trim() // Убираем ```json и ```
-		console.log('🔍 Cleaned markdown (json):', cleanRaw.substring(0, 100) + '...')
+
 	} else if (cleanRaw.startsWith('```') && cleanRaw.endsWith('```')) {
 		cleanRaw = cleanRaw.slice(3, -3).trim() // Убираем ``` и ```
-		console.log('🔍 Cleaned markdown (no lang):', cleanRaw.substring(0, 100) + '...')
+
 	} else {
-		console.log('🔍 No markdown detected, using raw')
+
 	}
 	
 	// Ищем JSON в конце текста (часто AI возвращает текст + JSON)
@@ -24,16 +23,11 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 		try {
 			const jsonStr = jsonMatch[0]
 			const json = JSON.parse(jsonStr)
-			console.log('✅ Found JSON at end, parsed:', json)
+
 			
 			// Проверяем структуру JSON
 			if (json && typeof json === 'object') {
-				console.log('🔍 JSON structure check:', {
-					hasText: typeof json.text === 'string',
-					hasTerms: Array.isArray(json.terms),
-					textLength: json.text?.length || 0,
-					termsCount: json.terms?.length || 0
-				})
+				
 				
 				if (typeof json.text === 'string' && Array.isArray(json.terms)) {
 					const terms: InteractiveTerm[] = []
@@ -58,33 +52,24 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 						info: term.info.trim()
 					}))
 					
-					console.log('✅ Returning JSON response with terms:', cleanTerms)
 					return { text: cleanText, terms: cleanTerms }
 				} else {
-					console.log('⚠️ JSON structure invalid:', {
-						textType: typeof json.text,
-						termsType: Array.isArray(json.terms) ? 'array' : typeof json.terms
-					})
+					
 				}
 			}
 		} catch (error) {
-			console.log('⚠️ JSON at end parsing failed:', error)
+			// JSON at end parsing failed
 		}
 	}
 	
 	// Если JSON не найден в конце, пытаемся распарсить весь текст как JSON
 	try {
 		const json = JSON.parse(cleanRaw)
-		console.log('✅ Parsed entire text as JSON:', json)
+
 		
 		// Проверяем структуру JSON
 		if (json && typeof json === 'object') {
-			console.log('🔍 JSON structure check:', {
-				hasText: typeof json.text === 'string',
-				hasTerms: Array.isArray(json.terms),
-				textLength: json.text?.length || 0,
-				termsCount: json.terms?.length || 0
-			})
+
 			
 			if (typeof json.text === 'string' && Array.isArray(json.terms)) {
 				const terms: InteractiveTerm[] = []
@@ -109,18 +94,14 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 					info: term.info.trim()
 				}))
 				
-				console.log('✅ Returning JSON response with terms:', cleanTerms)
 				return { text: cleanText, terms: cleanTerms }
 			} else {
-				console.log('⚠️ JSON structure invalid:', {
-					textType: typeof json.text,
-					termsType: Array.isArray(json.terms) ? 'array' : typeof json.terms
-				})
+
 			}
 		}
-		console.log('⚠️ JSON parsed but invalid structure')
+
 	} catch (error) {
-		console.log('⚠️ JSON parsing failed, trying to fix incomplete JSON:', error)
+
 		
 		// Пытаемся исправить неполный JSON
 		try {
@@ -166,7 +147,7 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 				
 				if (braceCount === 0 && jsonEnd > jsonStart) {
 					const fixedJson = cleanRaw.substring(jsonStart, jsonEnd)
-					console.log('🔧 Attempting to fix incomplete JSON:', fixedJson.substring(0, 100) + '...')
+	
 					
 					try {
 						const json = JSON.parse(fixedJson)
@@ -216,16 +197,15 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 							// Ограничиваем количество терминов
 							const limitedTerms = terms.slice(0, 5)
 							
-							console.log('✅ Fixed incomplete JSON, returning:', { text, terms: limitedTerms })
 							return { text, terms: limitedTerms }
 						}
 					} catch (fixError) {
-						console.log('⚠️ Failed to fix incomplete JSON:', fixError)
+						// Failed to fix incomplete JSON
 					}
 				}
 			}
 		} catch (fixError) {
-			console.log('⚠️ Error during JSON fixing attempt:', fixError)
+			// Error during JSON fixing attempt
 		}
 		
 		// Если JSON не парсится, обрабатываем как обычный текст
@@ -235,7 +215,7 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 	const text = cleanRaw.trim()
 	if (!text) return null
 
-	console.log('📝 Processing as plain text, length:', text.length)
+
 
 	// Извлекаем потенциальные термины из текста
 	const terms: InteractiveTerm[] = []
@@ -268,7 +248,7 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 	// Ограничиваем количество терминов
 	const limitedTerms = terms.slice(0, 5)
 	
-	console.log('🔍 Extracted terms from text (fallback):', limitedTerms)
+
 
 	return { text, terms: limitedTerms }
 }

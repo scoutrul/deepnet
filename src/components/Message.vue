@@ -22,10 +22,7 @@
 						</svg>
 						Повторить
 					</button>
-					<!-- Отладочная информация -->
-					<div v-if="!message.originalQuestion" class="text-xs text-red-600 mt-1">
-						Debug: originalQuestion отсутствует
-					</div>
+
 				</div>
 			</div>
 			<div v-else-if="message.isTimeout" class="timeout-message rounded-md border p-3">
@@ -89,39 +86,20 @@ import HoverTerm from '@/components/hover/HoverTerm.vue'
 		},
 		components: { HoverTerm },
 		mounted() {
-			// Отладочная информация для ошибок
-			if (this.message.error) {
-				console.log('🔍 Message error debug:', {
-					messageId: this.message.id,
-					error: this.message.error,
-					content: this.message.content,
-					originalQuestion: this.message.originalQuestion,
-					hasOriginalQuestion: !!this.message.originalQuestion
-				})
-			}
+			
 		},
 	computed: {
 		formattedText() {
-			console.log('🔍 Message formattedText:', {
-				hasParsed: !!this.message.parsed,
-				parsedText: this.message.parsed?.text,
-				parsedTerms: this.message.parsed?.terms,
-				messageRole: this.message.role,
-				messageContent: this.message.content,
-				hasError: !!this.message.error,
-				isTimeout: !!this.message.isTimeout,
-				originalQuestion: this.message.originalQuestion
-			})
+			
 			
 			if (!this.message.parsed?.text) {
-				console.log('⚠️ No parsed text, falling back to content')
 				return this.message.content || ''
 			}
 			
 			let text = this.message.parsed.text
 			const terms = this.message.parsed.terms || []
 			
-			console.log('🔍 Processing text:', { text, termsCount: terms.length })
+
 			
 			// Сортируем термины по длине (от длинных к коротким) для правильной замены
 			const sortedTerms = [...terms].sort((a, b) => b.text.length - a.text.length)
@@ -132,7 +110,7 @@ import HoverTerm from '@/components/hover/HoverTerm.vue'
 				text = text.replace(regex, `<span class="term-highlight underline decoration-dotted underline-offset-2 cursor-pointer hover:text-slate-700" data-term="${term.text}" data-info="${term.info}">${term.text}</span>`)
 			}
 			
-			console.log('🔍 Final formatted text:', text)
+
 			return text
 		},
 		inlinePieces() {
@@ -181,7 +159,7 @@ import HoverTerm from '@/components/hover/HoverTerm.vue'
 			}
 		},
 		handleRetry(question, messageId) {
-			console.log('🔍 Message retry clicked:', { question, messageId, message: this.message })
+	
 			this.$emit('retry', question, messageId)
 		},
 		isQueued(label) {

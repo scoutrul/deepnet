@@ -20,13 +20,7 @@ export async function fetchCompletion(params: FetchCompletionParams): Promise<Fe
 	const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
 	
 	// Debug logging
-	console.log('🔍 API Request Debug:', {
-		url: `${params.apiBaseUrl}/chat/completions`,
-		model: `openai/${params.model}`,
-		apiKey: params.apiKey ? `${params.apiKey.substring(0, 7)}...` : 'NOT SET',
-		referrer: params.referrer,
-		title: params.title
-	})
+
 	
 	try {
 		const msgs: Array<{ role: string; content: string }> = [
@@ -39,11 +33,7 @@ export async function fetchCompletion(params: FetchCompletionParams): Promise<Fe
 				.replace(/&[a-zA-Z]+;/g, '') // Убираем HTML entities
 				.trim()
 			
-			console.log('🔍 HTML cleaning:', {
-				original: params.previousAssistantContent.substring(0, 100) + '...',
-				cleaned: cleanContent.substring(0, 100) + '...',
-				hasHtml: /<[^>]*>/.test(params.previousAssistantContent)
-			})
+
 			
 			if (cleanContent) {
 				msgs.push({ role: 'assistant', content: cleanContent })
@@ -71,11 +61,6 @@ export async function fetchCompletion(params: FetchCompletionParams): Promise<Fe
 
 		if (!response.ok) {
 			const errorData = await response.json().catch(() => ({} as any))
-			console.error('🚨 API Error Response:', {
-				status: response.status,
-				statusText: response.statusText,
-				errorData: errorData
-			})
 			throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorData.error?.message || ''}`)
 		}
 
@@ -117,7 +102,6 @@ export async function fetchCompletion(params: FetchCompletionParams): Promise<Fe
 							}
 						} catch (e) {
 							// Игнорируем ошибки парсинга отдельных чанков
-							console.log('🔍 Chunk parsing warning:', e)
 						}
 					}
 				}
@@ -126,24 +110,14 @@ export async function fetchCompletion(params: FetchCompletionParams): Promise<Fe
 			reader.releaseLock()
 		}
 
-		console.log('🔍 Streamed Content:', fullContent)
+
 		return {
 			content: fullContent || 'Извините, не удалось получить ответ.',
 			isTimeout: false,
 			isError: false
 		}
 			} catch (error: any) {
-			console.log('🔍 Error caught in aiClient:', {
-				errorName: error.name,
-				errorMessage: error.message,
-				errorType: typeof error,
-				hasAbortError: error.name === 'AbortError',
-				has401: error.message?.includes('401'),
-				has429: error.message?.includes('429'),
-				has402: error.message?.includes('402'),
-				has400: error.message?.includes('400'),
-				hasPaymentRequired: error.message?.includes('Payment Required')
-			})
+
 
 		if (error.name === 'AbortError') {
 			return {
@@ -199,7 +173,7 @@ export async function fetchCompletion(params: FetchCompletionParams): Promise<Fe
 						timestamp: Date.now()
 					}))
 				} catch (e) {
-					console.warn('Failed to save error info to localStorage:', e)
+					// Failed to save error info to localStorage
 				}
 			}
 			

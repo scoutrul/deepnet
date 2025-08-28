@@ -257,11 +257,7 @@ ${detailInstructions}
 						.replace(/&[a-zA-Z]+;/g, '') // Убираем HTML entities
 						.trim()
 					
-					console.log('🔍 App HTML cleaning:', {
-						original: originalText.substring(0, 100) + '...',
-						cleaned: previousAssistantText.substring(0, 100) + '...',
-						hasHtml: /<[^>]*>/.test(originalText)
-					})
+
 				}
 				this.previewRequest(question, previousAssistantText)
 				const systemPrompt = this.buildSystemPrompt(this.options.detailLevel)
@@ -272,16 +268,7 @@ ${detailInstructions}
 					systemPrompt
 				})
 				
-				console.log('🔍 Assistant response:', {
-					raw: assistant.raw,
-					parsed: assistant.parsed,
-					hasParsed: !!assistant.parsed,
-					parsedText: assistant.parsed?.text,
-					parsedTerms: assistant.parsed?.terms,
-					isTimeout: assistant.isTimeout,
-					isError: assistant.isError,
-					originalQuestion: assistant.originalQuestion
-				})
+
 				
 				const elapsed = Date.now() - started
 				const delay = Math.max(0, 300 - elapsed)
@@ -338,16 +325,15 @@ ${detailInstructions}
 			}
 		},
 		async retryMessage(question, messageId) {
-			console.log('🔍 Retry started:', { question, messageId })
+	
 			
 			// Находим сообщение для повтора
 			const messageIndex = this.messages.findIndex(m => m.id === messageId)
 			if (messageIndex === -1) {
-				console.warn('Message not found for retry:', messageId)
 				return
 			}
 
-			console.log('🔍 Found message at index:', messageIndex, this.messages[messageIndex])
+
 
 			// Заменяем содержимое сообщения на лоадер
 			this.messages[messageIndex] = {
@@ -379,17 +365,13 @@ ${detailInstructions}
 						.replace(/&[a-zA-Z]+;/g, '') // Убираем HTML entities
 						.trim()
 
-					console.log('🔍 Retry HTML cleaning:', {
-						original: originalText.substring(0, 100) + '...',
-						cleaned: previousAssistantText.substring(0, 100) + '...',
-						hasHtml: /<[^>]*>/.test(originalText)
-					})
+
 				}
 
 				this.previewRequest(question, previousAssistantText)
 				const systemPrompt = this.buildSystemPrompt(this.options.detailLevel)
 				
-				console.log('🔍 Sending retry request:', { question, systemPrompt })
+
 				
 				const assistant = await chatService.ask(question, {
 					usePreviousContext: !!this.options.usePrev,
@@ -398,16 +380,7 @@ ${detailInstructions}
 					systemPrompt
 				})
 
-				console.log('🔍 Retry response:', {
-					raw: assistant.raw,
-					parsed: assistant.parsed,
-					hasParsed: !!assistant.parsed,
-					parsedText: assistant.parsed?.text,
-					parsedTerms: assistant.parsed?.terms,
-					isTimeout: assistant.isTimeout,
-					isError: assistant.isError,
-					originalQuestion: assistant.originalQuestion
-				})
+
 				
 				const elapsed = Date.now() - started
 				const delay = Math.max(0, 300 - elapsed)
@@ -435,14 +408,14 @@ ${detailInstructions}
 					messageData.originalQuestion = assistant.originalQuestion
 				}
 
-				console.log('🔍 Updating message at index:', messageIndex, messageData)
+
 				this.messages[messageIndex] = messageData
 				
 				this.queuedTerms = []
 				this.$refs.chatInput?.focus?.()
 				this.draft = ''
 			} catch (e) {
-				console.error('🔍 Retry error:', e)
+
 				
 				// При ошибке возвращаем исходное сообщение с ошибкой
 				this.messages[messageIndex] = {
@@ -478,11 +451,7 @@ ${detailInstructions}
 						.replace(/&[a-zA-Z]+;/g, '') // Убираем HTML entities
 						.trim()
 					
-					console.log('🔍 Clarification HTML cleaning:', {
-						original: originalText.substring(0, 100) + '...',
-						cleaned: previousAssistantText.substring(0, 100) + '...',
-						hasHtml: /<[^>]*>/.test(originalText)
-					})
+
 				}
 				
 				// Для уточнений ВСЕГДА используем предыдущий контекст и специальный промпт
@@ -495,22 +464,9 @@ ${detailInstructions}
 					systemPrompt
 				})
 				
-				console.log('🔍 Clarification response:', {
-					raw: assistant.raw,
-					parsed: assistant.parsed,
-					hasParsed: !!assistant.parsed,
-					parsedText: assistant.parsed?.text,
-					parsedTerms: assistant.parsed?.terms,
-					isTimeout: assistant.isTimeout,
-					isError: assistant.isError,
-					originalQuestion: assistant.originalQuestion
-				})
 
-				console.log('🔍 Clarification isError check:', {
-					isError: assistant.isError,
-					content: assistant.raw,
-					isTimeout: assistant.isTimeout
-				})
+
+
 				
 				const elapsed = Date.now() - started
 				const delay = Math.max(0, 300 - elapsed)

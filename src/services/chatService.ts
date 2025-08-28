@@ -22,12 +22,12 @@ export const chatService = {
 					// Ограничиваем max_tokens доступным количеством с запасом
 					const safeLimit = Math.floor(errorInfo.availableTokens * 0.9) // 90% от доступного
 					if (maxTokens > safeLimit) {
-						console.log(`🔍 Limiting max_tokens from ${maxTokens} to ${safeLimit} due to credit limits`)
+	
 						maxTokens = safeLimit
 					}
 				}
 			} catch (e) {
-				console.warn('Failed to parse last error info:', e)
+				// Failed to parse last error info
 			}
 		}
 
@@ -56,14 +56,9 @@ export const chatService = {
 			previousAssistantContent: opts?.usePreviousContext ? (opts?.previousAssistantText || '') : undefined,
 		})
 		
-		console.log('🔍 ChatService result:', result)
-		console.log('🔍 ChatService isError check:', {
-			isError: result.isError,
-			content: result.content,
-			isTimeout: result.isTimeout
-		})
+
 		const parsed = result.isTimeout ? null : parseToUiModel(result.content)
-		console.log('🔍 ChatService parsed result:', parsed)
+
 		
 		return { 
 			raw: result.content, 
@@ -103,16 +98,16 @@ function tuningByLevel(level: 'short' | 'extended' | 'max') {
 				// Ограничиваем max_tokens доступным количеством с запасом
 				const safeLimit = Math.floor(errorInfo.availableTokens * 0.8) // 80% от доступного
 				if (settings.maxTokens > safeLimit) {
-					console.log(`🔍 Credit limit: reducing max_tokens from ${settings.maxTokens} to ${safeLimit}`)
+	
 					settings.maxTokens = safeLimit
 				}
 			}
-		} catch (e) {
-			console.warn('Failed to parse credit limit info:', e)
-		}
+					} catch (e) {
+				// Failed to parse credit limit info
+			}
 	}
 	
-	console.log(`🔍 Tuning for level "${level}":`, settings)
+
 	return settings
 }
 
