@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node
+node_modules/
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Build artifacts
+/dist/
+/dist-ssr/
+/**/*.log
+logs/
+
+# IDE
+.vscode/
+!.vscode/extensions.json
+.idea/
+
+# Cache
+node_cache/
+.vite/
