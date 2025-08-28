@@ -57,7 +57,7 @@ src/
 ```
 
 ### API Integration (Интеграция API)
-- **Provider (Провайдер)**: OpenRouter.ai (OpenAI-compatible)
+- **Provider (Провайдер)**: OpenAI API
 - **Fallback (Резервный вариант)**: Mock responses для разработки
 - **Authentication (Аутентификация)**: Bearer token через env переменные
 - **Timeout (Таймаут)**: AbortController с настраиваемым таймаутом
@@ -112,9 +112,9 @@ AI → Генерирует ответ → Парсится в структур�
 ### Environment Variables (Переменные окружения)
 ```bash
 # API Configuration (Конфигурация API)
-VITE_OPENROUTER_API_KEY=your_api_key_here
-VITE_API_BASE_URL=https://openrouter.ai/api/v1
-VITE_CHAT_MODEL=gpt-4.1-mini
+VITE_OPENAI_API_KEY=your_openai_api_key_here
+VITE_API_BASE_URL=https://api.openai.com/v1
+VITE_CHAT_MODEL=gpt-4
 
 # App Settings (Настройки приложения)
 VITE_APP_TITLE=DeepNet Encyclopedia

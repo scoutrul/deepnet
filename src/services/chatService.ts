@@ -2,10 +2,10 @@ import { fetchCompletion } from '@/services/aiClient'
 import { parseToUiModel } from '@/services/responseParser'
 import type { ParsedResponse } from '@/types/ai'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://openrouter.ai/api/v1'
-const MODEL = import.meta.env.VITE_CHAT_MODEL || 'gpt-4.1-mini'
-const TIMEOUT_MS = Number(import.meta.env.VITE_REQUEST_TIMEOUT_MS || 20000)
-const API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || import.meta.env.VITE_OPENAI_API_KEY || ''
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://api.openai.com/v1'
+const MODEL = import.meta.env.VITE_CHAT_MODEL || 'gpt-4'
+const TIMEOUT_MS = Number(import.meta.env.VITE_REQUEST_TIMEOUT_MS || 5000)
+const API_KEY = import.meta.env.VITE_OPENAI_API_KEY || ''
 
 export const chatService = {
 	async ask(question: string, opts?: { usePreviousContext?: boolean; previousAssistantText?: string; detailLevel?: 'short' | 'extended' | 'max' }): Promise<{ raw: string; parsed: ParsedResponse | null }> {

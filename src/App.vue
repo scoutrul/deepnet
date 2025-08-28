@@ -121,8 +121,8 @@ export default {
 			return `Ты — интерактивный чат-помощник «Энциклопедия Погружение». Твоя цель — помогать пользователю быстро погружаться в любую техническую тему через короткие, понятные ответы.\n\n${hint}\n\nПравила работы:\n1. Отвечай коротко: 2–3 предложения максимум.\n2. Выделяй ключевые термины/фразы, которые имеют смысловую нагрузку и могут быть интерактивными.\n3. После каждого ответа предоставляй список сопутствующих терминов и технологий.\n4. Все ответы должны быть контекстно связаны с предыдущими вопросами и ответами пользователя.\n5. Стиль — ясный, технический, без лишней воды.\n6. Если пользователь выбирает термин из списка, давай новый короткий ответ по выбранному термину, снова с сопутствующими терминами.\n7. Ключевые термины должны быть осмысленными, а не каждое отдельное слово.\n\nФормат ответа (JSON):\n{\n  \"text\": \"<короткий текст с выделенными терминами>\",\n  \"terms\": [\n    {\"text\": \"<термин>\", \"info\": \"<короткое объяснение или ссылка>\"},\n    {\"text\": \"<термин>\", \"info\": \"<короткое объяснение или ссылка>\"}\n  ]\n}`
 		},
 		previewRequest(question, previousAssistantText) {
-			const model = import.meta.env.VITE_CHAT_MODEL || 'gpt-4.1-mini'
-			const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://openrouter.ai/api/v1'
+			const model = import.meta.env.VITE_CHAT_MODEL || 'gpt-4'
+			const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://api.openai.com/v1'
 			const level = this.options.detailLevel || 'extended'
 			const tuning = level === 'short' ? { temperature: 0.3, max_tokens: 350 } : level === 'max' ? { temperature: 0.7, max_tokens: 1200 } : { temperature: 0.5, max_tokens: 700 }
 			const messages = [{ role: 'system', content: this.buildSystemPrompt(level) }]
