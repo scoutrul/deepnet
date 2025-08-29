@@ -108,101 +108,47 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 			// Ищем начало JSON объекта
 			const jsonStart = cleanRaw.indexOf('{')
 			if (jsonStart !== -1) {
-				// Ищем закрывающие скобки для text и terms
+				// Сначала попытка найти сбалансированный JSON
 				let jsonEnd = jsonStart
 				let braceCount = 0
 				let inString = false
 				let escapeNext = false
-				
+				let bracketCount = 0
 				for (let i = jsonStart; i < cleanRaw.length; i++) {
-					const char = cleanRaw[i]
-					
-					if (escapeNext) {
-						escapeNext = false
-						continue
-					}
-					
-					if (char === '\\') {
-						escapeNext = true
-						continue
-					}
-					
-					if (char === '"' && !escapeNext) {
-						inString = !inString
-						continue
-					}
-					
+					const ch = cleanRaw[i]
+					if (escapeNext) { escapeNext = false; continue }
+					if (ch === '\\') { escapeNext = true; continue }
+					if (ch === '"') { inString = !inString; continue }
 					if (!inString) {
-						if (char === '{') {
-							braceCount++
-						} else if (char === '}') {
-							braceCount--
-							if (braceCount === 0) {
-								jsonEnd = i + 1
-								break
-							}
-						}
+						if (ch === '{') braceCount++
+						else if (ch === '}') { braceCount--; if (braceCount === 0) { jsonEnd = i + 1; break } }
+						else if (ch === '[') bracketCount++
+						else if (ch === ']') bracketCount--
 					}
 				}
-				
-				if (braceCount === 0 && jsonEnd > jsonStart) {
-					const fixedJson = cleanRaw.substring(jsonStart, jsonEnd)
-	
-					
-					try {
-						const json = JSON.parse(fixedJson)
-						if (json && typeof json === 'object' && typeof json.text === 'string') {
-							// Извлекаем текст и пытаемся найти термины
-							const text = json.text.trim()
-							const terms: InteractiveTerm[] = []
-							
-							// Если есть terms, используем их
-							if (Array.isArray(json.terms)) {
-								for (const t of json.terms) {
-									if (t && typeof t.text === 'string' && typeof t.info === 'string') {
-										terms.push({
-											text: t.text.trim(),
-											info: t.info.trim()
-										})
-									}
+				let candidate = cleanRaw.substring(jsonStart, jsonEnd > jsonStart ? jsonEnd : cleanRaw.length)
+				// Если не сбалансировано — пытаемся дозакрыть
+				if (inString) candidate += '"'
+				if (bracketCount > 0) candidate += ']'.repeat(bracketCount)
+				if (braceCount > 0) candidate += '}'.repeat(braceCount)
+				// Убираем возможную висячую запятую перед закрывающей скобкой
+				candidate = candidate.replace(/,\s*([]}])/g, '$1')
+				try {
+					const json = JSON.parse(candidate)
+					if (json && typeof json === 'object' && typeof json.text === 'string') {
+						const text = json.text.trim()
+						const terms: InteractiveTerm[] = []
+						if (Array.isArray(json.terms)) {
+							for (const t of json.terms) {
+								if (t && typeof t.text === 'string' && typeof t.info === 'string') {
+									terms.push({ text: t.text.trim(), info: t.info.trim() })
 								}
 							}
-							
-							// Если терминов нет, извлекаем их из текста
-							if (terms.length === 0) {
-								const termPatterns = [
-									/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g,
-									/\b[A-Z]{2,}\b/g,
-									/\b[a-z]+(?:\.[a-z]+)+\b/g,
-									/\b\w+\(\)\b/g,
-								]
-								
-								const foundTerms = new Set<string>()
-								for (const pattern of termPatterns) {
-									const matches = text.match(pattern)
-									if (matches) {
-										matches.forEach((match: string) => {
-											if (match.length > 2 && !foundTerms.has(match)) {
-												foundTerms.add(match)
-												terms.push({
-													text: match,
-													info: `Термин: ${match}`
-												})
-											}
-										})
-									}
-								}
-							}
-							
-							// Ограничиваем количество терминов
-							const limitedTerms = terms.slice(0, 5)
-							
-							return { text, terms: limitedTerms }
 						}
-					} catch (fixError) {
-						// Failed to fix incomplete JSON
+						const limitedTerms = (terms.length ? terms : []).slice(0, 5)
+						return { text, terms: limitedTerms }
 					}
-				}
+				} catch {}
 			}
 		} catch (fixError) {
 			// Error during JSON fixing attempt

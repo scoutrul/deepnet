@@ -1,11 +1,14 @@
-import { fetchCompletion } from '@/services/aiClient'
+// import { fetchCompletion } from '@/services/aiClient'
+import { OpenRouterProvider } from '@/services/providers/openrouterProvider'
+import { AnthropicProvider } from '@/services/providers/anthropicProvider'
+import type { ChatProvider } from '@/services/providers/types'
 import { parseToUiModel } from '@/services/responseParser'
 import type { ParsedResponse } from '@/types/ai'
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://openrouter.ai/api/v1'
 const MODEL = import.meta.env.VITE_CHAT_MODEL || 'gpt-4o'
 const TIMEOUT_MS = Number(import.meta.env.VITE_REQUEST_TIMEOUT_MS || 5000)
 const API_KEY = import.meta.env.VITE_OPENAI_API_KEY || ''
+const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || ''
 
 export const chatService = {
 	async ask(question: string, opts?: { usePreviousContext?: boolean; previousAssistantText?: string; detailLevel?: 'short' | 'extended' | 'max'; systemPrompt?: string }): Promise<{ raw: string; parsed: ParsedResponse | null; isTimeout: boolean; isError: boolean; originalQuestion?: string; isCreditLimit?: boolean; availableTokens?: number }> {
@@ -42,17 +45,22 @@ export const chatService = {
 			}
 		}
 
-		const result = await fetchCompletion({
+		// Выбор провайдера: Anthropic для моделей claude*, иначе OpenRouter
+		let provider: ChatProvider
+		const isAnthropic = /^claude/i.test(MODEL)
+		provider = isAnthropic ? new AnthropicProvider() : new OpenRouterProvider()
+		const providerApiKey = isAnthropic ? (ANTHROPIC_API_KEY || API_KEY) : API_KEY
+
+		const result = await provider.complete({
 			systemPrompt,
 			question,
 			model: MODEL,
 			timeoutMs: TIMEOUT_MS,
-			apiKey: API_KEY,
-			apiBaseUrl: BASE_URL,
-			referrer: import.meta.env.VITE_HTTP_REFERRER || location.origin,
-			title: import.meta.env.VITE_APP_TITLE || 'DeepNet Encyclopedia',
+			apiKey: providerApiKey,
 			temperature,
 			maxTokens,
+			referrer: import.meta.env.VITE_HTTP_REFERRER || location.origin,
+			title: import.meta.env.VITE_APP_TITLE || 'DeepNet Encyclopedia',
 			previousAssistantContent: opts?.usePreviousContext ? (opts?.previousAssistantText || '') : undefined,
 		})
 		
@@ -74,9 +82,9 @@ export const chatService = {
 
 // Константы для настройки уровней подробности
 const TOKEN_LIMITS = {
-	SHORT: 150,
+	SHORT: 200,
 	EXTENDED: 600,
-	MAX: 980
+	MAX: 1500
 }
 
 function tuningByLevel(level: 'short' | 'extended' | 'max') {

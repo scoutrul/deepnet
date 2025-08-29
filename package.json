@@ -21,6 +21,7 @@
 		"vite-plugin-vue2": "^2.0.3"
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "0.60.0",
 		"@vue/composition-api": "^1.7.2",
 		"uuid": "^9.0.1",
 		"vue": "^2.7.16",
