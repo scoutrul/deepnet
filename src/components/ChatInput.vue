@@ -33,6 +33,11 @@ export default {
 				this.$refs.input && this.$refs.input.focus()
 			})
 		},
+		clear() {
+			this.text = ''
+			this.$emit('draft-change', this.text)
+			this.focus()
+		},
 		onInput() {
 			this.$emit('draft-change', this.text)
 		},

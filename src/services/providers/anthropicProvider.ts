@@ -26,7 +26,7 @@ export class AnthropicProvider implements ChatProvider {
       const parts = result?.content || []
       for (const part of parts) {
         if (part?.type === 'text' && part?.text) {
-          text += part.text
+          text += (text ? '\n\n' : '') + String(part.text)
         }
       }
       if (!text && typeof result?.content === 'string') {

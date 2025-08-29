@@ -43,7 +43,7 @@
 			<div v-else>
 				<div v-if="message.parsed && !message.error && !message.isTimeout && !message.parsed.error" class="space-y-2">
 					<div 
-						class="text-sm whitespace-pre-wrap" 
+						class="message-body text-sm whitespace-pre-wrap" 
 						v-html="formattedText"
 						@click="handleTermClick"
 					></div>
@@ -110,6 +110,11 @@ import HoverTerm from '@/components/hover/HoverTerm.vue'
 				text = text.replace(regex, `<span class="term-highlight underline decoration-dotted underline-offset-2 cursor-pointer hover:text-slate-700" data-term="${term.text}" data-info="${term.info}">${term.text}</span>`)
 			}
 			
+			// Разбиваем на параграфы по пустой строке и оборачиваем каждый в <p>
+			const parts = text.split(/\n\s*\n/)
+			if (parts.length > 1) {
+				return parts.map(p => `<p class="mb-2 leading-relaxed">${p.trim()}</p>`).join('')
+			}
 
 			return text
 		},
@@ -145,16 +150,26 @@ import HoverTerm from '@/components/hover/HoverTerm.vue'
 	methods: {
 		handleTermClick(event) {
 			const target = event.target
-			if (target.classList.contains('term-highlight')) {
+			// Сначала проверяем клик по подсвеченному термину
+			if (target.classList && target.classList.contains('term-highlight')) {
 				const term = target.dataset.term
 				const info = target.dataset.info
-				
 				if (event.ctrlKey || event.metaKey) {
-					// Ctrl/Cmd + клик = добавить в очередь
 					this.$emit('queue-term', { text: term, info })
 				} else {
-					// Обычный клик = отправить запрос
 					this.$emit('click-term', { text: term, info })
+				}
+				return
+			}
+			// Если клик по <strong> — используем его текст как термин
+			if (target.tagName === 'STRONG') {
+				const label = (target.textContent || '').trim()
+				if (label) {
+					if (event.ctrlKey || event.metaKey) {
+						this.$emit('queue-term', { text: label, info: `Термин: ${label}` })
+					} else {
+						this.$emit('click-term', { text: label, info: `Термин: ${label}` })
+					}
 				}
 			}
 		},
@@ -172,3 +187,16 @@ import HoverTerm from '@/components/hover/HoverTerm.vue'
 	},
 }
 </script>
+
+<style scoped>
+/* Применяем стили к контенту, вставленному через v-html */
+::v-deep .message-body strong {
+	cursor: pointer;
+	text-decoration: underline dotted;
+	text-underline-offset: 2px;
+	transition: color 0.15s ease-in-out;
+}
+::v-deep .message-body strong:hover {
+	color: rgb(51, 65, 85); /* slate-700 */
+}
+</style>

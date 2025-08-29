@@ -6,6 +6,18 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 	// Очищаем от markdown разметки (```json ... ```)
 	let cleanRaw = raw.trim()
 
+	// Предварительная очистка: сохраняем форматирующие теги, но убираем шумные атрибуты,
+	// чтобы JSON не ломался (например: data-info, class, style)
+	// Пример шума: "Vue.js" data-info="Термин: Vue.js">Vue.js
+	cleanRaw = cleanRaw
+		// Удаляем атрибуты data-*, class, style из открывающих тегов
+		.replace(/<([a-zA-Z][a-z0-9]*)\b[^>]*?(\sdata-[a-zA-Z-]+="[^"]*"|\sclass="[^"]*"|\sstyle="[^"]*")+[^>]*>/g, '<$1>')
+		// Блокируем потенциальные скрипты полностью
+		.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+		// Схлопываем множественные пробелы вне тегов
+		.replace(/\s{2,}/g, ' ')
+		.trim()
+
 	
 	if (cleanRaw.startsWith('```json') && cleanRaw.endsWith('```')) {
 		cleanRaw = cleanRaw.slice(7, -3).trim() // Убираем ```json и ```
@@ -145,8 +157,7 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 								}
 							}
 						}
-						const limitedTerms = (terms.length ? terms : []).slice(0, 5)
-						return { text, terms: limitedTerms }
+						return { text, terms }
 					}
 				} catch {}
 			}
@@ -168,10 +179,12 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 	
 	// Ищем технические термины (слова с заглавной буквы, аббревиатуры, etc.)
 	const termPatterns = [
-		/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g, // Vue 2 Options API
+		/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b/g, // Nouns/Proper names: Frontend Framework
 		/\b[A-Z]{2,}\b/g, // API, DOM, JSON
+		/\b(?:[A-Z][a-z0-9]+\.)+[A-Za-z0-9]+\b/g, // Namespaces like React.DOM
 		/\b[a-z]+(?:\.[a-z]+)+\b/g, // promise.then, fetch.catch
 		/\b\w+\(\)\b/g, // then(), catch()
+		/\b[A-Za-z]+[- ][A-Za-z]+\b/g, // composed phrases: Virtual DOM, data flow
 	]
 
 	const foundTerms = new Set<string>()
@@ -191,10 +204,6 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 		}
 	}
 
-	// Ограничиваем количество терминов
-	const limitedTerms = terms.slice(0, 5)
-	
-
-
-	return { text, terms: limitedTerms }
+	// Возвращаем все найденные термины
+	return { text, terms }
 }
