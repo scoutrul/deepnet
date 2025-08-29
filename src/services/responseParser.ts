@@ -50,11 +50,12 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 						if (text && info) terms.push({ text, info })
 					}
 					
-					// Очищаем текст от лишних пробелов и форматируем
+					// Форматируем, сохраняя переносы строк (абзацы)
 					const cleanText = json.text
-						.replace(/\s+/g, ' ') // Убираем множественные пробелы
+						.replace(/\r\n/g, '\n')
 						.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // **текст** -> <strong>текст</strong>
 						.replace(/`([^`]+)`/g, '<code>$1</code>') // `код` -> <code>код</code>
+						.replace(/[^\S\n]+/g, ' ') // схлопываем только пробельные, кроме перевода строки
 						.trim()
 					
 					// Очищаем термины от лишних пробелов
@@ -92,11 +93,12 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 					if (text && info) terms.push({ text, info })
 				}
 				
-				// Очищаем текст от лишних пробелов и форматируем
+				// Форматируем, сохраняя переносы строк (абзацы)
 				const cleanText = json.text
-					.replace(/\s+/g, ' ') // Убираем множественные пробелы
-					.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // **текст** -> <strong>текст</strong>
-					.replace(/`([^`]+)`/g, '<code>$1</code>') // `код` -> <code>код</code>
+					.replace(/\r\n/g, '\n')
+					.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+					.replace(/`([^`]+)`/g, '<code>$1</code>')
+					.replace(/[^\S\n]+/g, ' ')
 					.trim()
 				
 				// Очищаем термины от лишних пробелов

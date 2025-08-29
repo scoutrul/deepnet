@@ -77,6 +77,8 @@
 
 <script>
 import HoverTerm from '@/components/hover/HoverTerm.vue'
+import { splitToParagraphs, applyMarkdownBasic, doubleNewlinesToBr } from '@/utils/text/format'
+import { highlightTerms } from '@/utils/text/highlight'
 
 	export default {
 		name: 'Message',
@@ -90,33 +92,17 @@ import HoverTerm from '@/components/hover/HoverTerm.vue'
 		},
 	computed: {
 		formattedText() {
-			
-			
 			if (!this.message.parsed?.text) {
 				return this.message.content || ''
 			}
-			
 			let text = this.message.parsed.text
 			const terms = this.message.parsed.terms || []
-			
-
-			
-			// Сортируем термины по длине (от длинных к коротким) для правильной замены
-			const sortedTerms = [...terms].sort((a, b) => b.text.length - a.text.length)
-			
-			// Заменяем термины на интерактивные span'ы
-			for (const term of sortedTerms) {
-				const regex = new RegExp(`\\b${term.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi')
-				text = text.replace(regex, `<span class="term-highlight underline decoration-dotted underline-offset-2 cursor-pointer hover:text-slate-700" data-term="${term.text}" data-info="${term.info}">${term.text}</span>`)
-			}
-			
-			// Разбиваем на параграфы по пустой строке и оборачиваем каждый в <p>
-			const parts = text.split(/\n\s*\n/)
-			if (parts.length > 1) {
-				return parts.map(p => `<p class="mb-2 leading-relaxed">${p.trim()}</p>`).join('')
-			}
-
-			return text
+			// markdown -> html (strong, code)
+			text = applyMarkdownBasic(text)
+			// подсветка терминов
+			text = highlightTerms(text, terms)
+			// параграфы
+			return doubleNewlinesToBr(text)
 		},
 		inlinePieces() {
 			if (!this.message.parsed?.terms?.length) return []
@@ -174,7 +160,7 @@ import HoverTerm from '@/components/hover/HoverTerm.vue'
 			}
 		},
 		handleRetry(question, messageId) {
-	
+			
 			this.$emit('retry', question, messageId)
 		},
 		isQueued(label) {

@@ -149,100 +149,12 @@ export default {
 				}, 100)
 			}
 		},
-		buildSystemPrompt(level) {
-			let detailInstructions = ''
-			let termsCount = 3
-			
-			if (level === 'short') {
-				detailInstructions = 'Дай максимально краткий ответ: 1-2 предложения максимум. Фокус на самом главном. Используй максимум 150 токенов.'
-				termsCount = 8
-			} else if (level === 'max') {
-				detailInstructions = 'Дай максимально полный и детальный ответ: 6-8 предложений. Включи примеры, детали, практические аспекты, углубленные концепции. Используй максимум 980 токенов.'
-				termsCount = 18
-			} else {
-				detailInstructions = 'Дай сбалансированный ответ: 3-4 предложения. Достаточно деталей для понимания, но без избыточности. Используй максимум 600 токенов.'
-				termsCount = 12
-			}
-			
-			return `Ты — интерактивный чат-помощник «Энциклопедия Погружение». Твоя цель — помогать пользователю быстро погружаться в любую техническую тему через понятные ответы.
-
-${detailInstructions}
-
-Правила работы:
-1. ${detailInstructions}
-2. ВСЕГДА отвечай на РУССКОМ языке. Никаких английских фраз или терминов без перевода.
-3. Структурируй ответ по абзацам: 3–6 коротких абзацев, между абзацами пустая строка. Каждый абзац начинается с короткого подзаголовка (2–4 слова), выделенного **жирным**.
-4. Сделай текст максимально «плотным» на термины: используй как можно больше осмысленных терминов и названий технологий прямо В ТЕКСТЕ.
-5. После каждого ответа предоставляй список из ${termsCount} (или больше, до 30) сопутствующих терминов и технологий.
-6. Каждый термин из массива terms ДОЛЖЕН дословно встречаться в тексте ответа (для клика).
-7. Все ответы должны быть контекстно связаны с предыдущими вопросами и ответами пользователя. Стиль — ясный, технический, без лишней воды.
-8. Если пользователь выбирает термин из списка, давай новый ответ по выбранному термину, снова с богатым набором терминов.
-9. Ключевые термины должны быть осмысленными, а не служебные слова.
-10. Для кратких ответов — фокус на сути; для развернутых — примеры и практические детали.
-11. Строго возвращай ВАЛИДНЫЙ JSON-объект, всегда закрывай все скобки/массивы.
-12. Если токенов не хватает — сократи поле "text", но обязательно верни корректно закрытый JSON.
-
-ВАЖНО: Всегда отвечай в JSON формате на РУССКОМ языке:
-{
-  "text": "<текст ответа на русском языке с выделенными терминами>",
-  "terms": [
-    {"text": "<термин на русском>", "info": "<короткое объяснение на русском языке>"},
-    {"text": "<термин на русском>", "info": "<короткое объяснение на русском языке>"}
-  ]
-}`
-		},
-		buildClarificationPrompt(level, previousText) {
-			let detailInstructions = ''
-			let termsCount = 6 // Больше терминов для уточнений
-			
-			if (level === 'short') {
-				detailInstructions = 'Дай развернутый ответ: 3-4 предложения. Фокус на дополнительной информации. Используй максимум 300 токенов.'
-				termsCount = 4
-			} else if (level === 'max') {
-				detailInstructions = 'Дай максимально полный и детальный ответ: 8-10 предложений. Включи примеры, детали, практические аспекты, углубленные концепции. Используй максимум 2000 токенов.'
-				termsCount = 8
-			} else {
-				detailInstructions = 'Дай развернутый ответ: 5-6 предложений. Достаточно деталей для углубленного понимания. Используй максимум 800 токенов.'
-				termsCount = 6
-			}
-			
-			return `Ты — интерактивный чат-помощник «Энциклопедия Погружение». Сейчас ты отвечаешь на запрос пользователя об уточнении деталей.
-
-${detailInstructions}
-
-ВАЖНОЕ ПРАВИЛО ДЛЯ УТОЧНЕНИЙ:
-- ВСЕГДА включай контекст предыдущего ответа: "${previousText}"
-- НЕ повторяй информацию, которая уже была сказана ранее
-- Дай НОВУЮ, дополнительную информацию по теме
-- Расширь и углубь понимание темы
-- Добавь практические примеры, детали, нюансы, которые не были упомянуты
-
-Правила работы:
-1. ${detailInstructions}
-2. ВСЕГДА отвечай на РУССКОМ языке. Никаких английских фраз или терминов без перевода.
-3. Выделяй ключевые термины/фразы, которые имеют смысловую нагрузку и могут быть интерактивными.
-4. После каждого ответа предоставляй список из ${termsCount} сопутствующих терминов и технологий.
-5. Все ответы должны быть контекстно связаны с предыдущими вопросами и ответами пользователя.
-6. Стиль — ясный, технический, без лишней воды.
-7. Если пользователь выбирает термин из списка, давай новый ответ по выбранному термину, снова с сопутствующими терминами.
-8. Ключевые термины должны быть осмысленными, а не каждое отдельное слово.
-9. Для уточнений: фокус на НОВОЙ информации, примерах и практических деталях.
-
-ВАЖНО: Всегда отвечай в JSON формате на РУССКОМ языке:
-{
-  "text": "<текст ответа на русском языке с выделенными терминами>",
-  "terms": [
-    {"text": "<термин на русском>", "info": "<короткое объяснение на русском языке>"},
-    {"text": "<термин на русском>", "info": "<короткое объяснение на русском языке>"}
-  ]
-}`
-		},
 		previewRequest(question, previousAssistantText) {
 			const model = import.meta.env.VITE_CHAT_MODEL || 'gpt-4o'
 			const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://openrouter.ai/api/v1'
 			const level = this.options.detailLevel || 'extended'
 			const tuning = level === 'short' ? { temperature: 0.3, max_tokens: 200 } : level === 'max' ? { temperature: 0.7, max_tokens: 1500 } : { temperature: 0.5, max_tokens: 500 }
-			const messages = [{ role: 'system', content: this.buildSystemPrompt(level) }]
+			const messages = [{ role: 'system', content: '[generated in chatService]' }]
 			let previousIncluded = false
 			let previousSnippet = ''
 			if (this.options.usePrev && previousAssistantText) {
@@ -276,13 +188,11 @@ ${detailInstructions}
 
 				}
 				this.previewRequest(question, previousAssistantText)
-				const systemPrompt = this.buildSystemPrompt(this.options.detailLevel)
 				const assistant = await chatService.ask(question, { 
 					usePreviousContext: !!this.options.usePrev, 
 					previousAssistantText, 
 					detailLevel: this.options.detailLevel,
-					systemPrompt
-				})
+				 })
 				
 
 				
@@ -385,7 +295,7 @@ ${detailInstructions}
 				}
 
 				this.previewRequest(question, previousAssistantText)
-				const systemPrompt = this.buildSystemPrompt(this.options.detailLevel)
+				const systemPrompt = '[generated in chatService]'
 				
 
 				
@@ -472,13 +382,11 @@ ${detailInstructions}
 				
 				// Для уточнений ВСЕГДА используем предыдущий контекст и специальный промпт
 				this.previewRequest(question, previousAssistantText)
-				const systemPrompt = this.buildClarificationPrompt(this.options.detailLevel, previousAssistantText)
 				const assistant = await chatService.ask(question, { 
 					usePreviousContext: true, // Принудительно включаем контекст для уточнений
 					previousAssistantText, 
 					detailLevel: this.options.detailLevel,
-					systemPrompt
-				})
+				 })
 				
 
 
