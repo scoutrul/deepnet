@@ -2,6 +2,16 @@
 	<div class="min-h-screen bg-slate-50 text-slate-900">
 		<div class="mx-auto max-w-6xl px-4 py-4">
 			<h1 class="mb-4 text-2xl font-semibold">DeepNet Encyclopedia</h1>
+			<!-- Voice Transcription Panel - Full Width -->
+			<div class="mb-6">
+				<VoicePanel 
+					ref="voicePanel"
+					@tag-selected="onTagSelected"
+					@add-selected-to-input="onAddSelectedToInput"
+				/>
+			</div>
+
+			<!-- Chat and Options Grid -->
 			<div class="grid grid-cols-3 gap-4">
 				<div class="col-span-2">
 					<div class="flex flex-col rounded-xl border border-slate-200 bg-white">
@@ -44,11 +54,12 @@ import { v4 as uuid } from 'uuid'
 import Message from '@/components/Message.vue'
 import ChatInput from '@/components/ChatInput.vue'
 import OptionsPanel from '@/components/OptionsPanel.vue'
+import VoicePanel from '@/components/voice/VoicePanel.vue'
 import { chatService } from '@/services/chatService'
 
 export default {
 	name: 'App',
-	components: { Message, ChatInput, OptionsPanel },
+	components: { Message, ChatInput, OptionsPanel, VoicePanel },
 	data() {
 		return {
 			messages: [
@@ -165,6 +176,25 @@ export default {
 			messages.push({ role: 'user', content: question })
 			this.lastRequestPreview = JSON.stringify({ url: `${apiBaseUrl}/chat/completions`, options: { includePreviousContext: !!this.options.usePrev, previousAssistantIncluded: previousIncluded, previousAssistantSnippet: previousSnippet }, body: { model, messages, ...tuning } }, null, 2)
 		},
+		onTagSelected(tagData) {
+			const { text, action } = tagData
+			if (action === 'add-to-input') {
+				this.$refs.chatInput?.appendText?.(text)
+			} else if (action === 'quick-add') {
+				this.$refs.chatInput?.appendText?.(text)
+			}
+		},
+
+		onAddSelectedToInput(selectedTags) {
+			if (selectedTags && selectedTags.length > 0) {
+				const texts = selectedTags.map(tag => tag.text || tag)
+				const combinedText = texts.join(', ')
+				this.$refs.chatInput?.appendText?.(combinedText)
+			}
+		},
+
+
+
 		async ask(question) {
 			const userMsg = { id: uuid(), role: 'user', content: question, createdAt: Date.now() }
 			this.messages.push(userMsg)
