@@ -7,11 +7,18 @@ import type { ParsedResponse } from '@/types/ai'
 
 const MODEL = import.meta.env.VITE_CHAT_MODEL || 'gpt-4o'
 const TIMEOUT_MS = Number(import.meta.env.VITE_REQUEST_TIMEOUT_MS || 5000)
-const API_KEY = import.meta.env.VITE_OPENAI_API_KEY || ''
 const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || ''
 
 export const chatService = {
 	async ask(question: string, opts?: { usePreviousContext?: boolean; previousAssistantText?: string; detailLevel?: 'short' | 'extended' | 'max'; systemPrompt?: string }): Promise<{ raw: string; parsed: ParsedResponse | null; isTimeout: boolean; isError: boolean; originalQuestion?: string; isCreditLimit?: boolean; availableTokens?: number }> {
+		// Проверяем обязательные переменные окружения
+		if (!import.meta.env.VITE_CHAT_MODEL) {
+			throw new Error('Отсутствует VITE_CHAT_MODEL')
+		}
+		if (!import.meta.env.VITE_API_BASE_URL) {
+			throw new Error('Отсутствует VITE_API_BASE_URL')
+		}
+		
 		const level = opts?.detailLevel || 'extended'
 		const systemPrompt = opts?.systemPrompt || buildSystemPrompt(level)
 		let { temperature, maxTokens } = tuningByLevel(level)
@@ -34,22 +41,27 @@ export const chatService = {
 			}
 		}
 
-		if (!API_KEY) {
-			const mock = buildMockResponse(question, level)
-			return { 
-				raw: JSON.stringify(mock), 
-				parsed: mock,
-				isTimeout: false,
-				isError: false,
-				originalQuestion: question
-			}
-		}
-
 		// Выбор провайдера: Anthropic для моделей claude*, иначе OpenRouter
 		let provider: ChatProvider
 		const isAnthropic = /^claude/i.test(MODEL)
-		provider = isAnthropic ? new AnthropicProvider() : new OpenRouterProvider()
-		const providerApiKey = isAnthropic ? (ANTHROPIC_API_KEY || API_KEY) : API_KEY
+		
+		// Проверяем переменные окружения для выбранного провайдера
+		if (isAnthropic) {
+			if (!ANTHROPIC_API_KEY) {
+				throw new Error('Отсутствует VITE_ANTHROPIC_API_KEY для моделей Anthropic')
+			}
+			provider = new AnthropicProvider()
+		} else {
+			// Для OpenRouter проверяем наличие API ключа
+			const openRouterApiKey = import.meta.env.VITE_OPENROUTER_API_KEY
+			if (!openRouterApiKey) {
+				throw new Error('Отсутствует VITE_OPENROUTER_API_KEY для OpenRouter')
+			}
+			provider = new OpenRouterProvider()
+		}
+		
+		// Получаем API ключ для выбранного провайдера
+		const providerApiKey = isAnthropic ? ANTHROPIC_API_KEY : import.meta.env.VITE_OPENROUTER_API_KEY
 
 		const result = await provider.complete({
 			systemPrompt,
@@ -163,14 +175,4 @@ ${detailInstructions}
 }`
 }
 
-function buildMockResponse(question: string, level: 'short' | 'extended' | 'max'): ParsedResponse {
-	const baseTerms = [
-		{ text: 'Vue 2 Options API', info: 'Классический способ описания компонентов через объект options.' },
-		{ text: 'Reactivity', info: 'Система реактивности отслеживает зависимости и обновляет DOM.' },
-		{ text: 'Promise chaining', info: 'Последовательная обработка асинхронных операций с помощью then().' },
-		{ text: 'TypeScript', info: 'Статическая типизация для улучшения DX и надёжности.' },
-	]
-	const prefix = level === 'short' ? 'Коротко по запросу' : level === 'max' ? 'Максимально подробно по запросу' : 'Развернуто по запросу'
-	const text = `${prefix}: «${question}». Обратите внимание на Vue 2 Options API, Reactivity и Promise chaining.`
-	return { text, terms: baseTerms }
-}
+
