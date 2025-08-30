@@ -6,15 +6,25 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 	// Очищаем от markdown разметки (```json ... ```)
 	let cleanRaw = raw.trim()
 
-	// Предварительная очистка: сохраняем форматирующие теги, но убираем шумные атрибуты,
-	// чтобы JSON не ломался (например: data-info, class, style)
-	// Пример шума: "Vue.js" data-info="Термин: Vue.js">Vue.js
+	// АГРЕССИВНАЯ очистка: убираем ВСЕ HTML-атрибуты и теги, оставляем только чистый текст
 	cleanRaw = cleanRaw
-		// Удаляем атрибуты data-*, class, style из открывающих тегов
-		.replace(/<([a-zA-Z][a-z0-9]*)\b[^>]*?(\sdata-[a-zA-Z-]+="[^"]*"|\sclass="[^"]*"|\sstyle="[^"]*")+[^>]*>/g, '<$1>')
-		// Блокируем потенциальные скрипты полностью
-		.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-		// Схлопываем множественные пробелы вне тегов
+		// 0. Специфично удаляем паттерны " data-info="">" и подобные
+		.replace(/"\s+data-info="[^"]*"[^>]*>/g, '')
+		.replace(/"\s+data-[a-zA-Z-]+="[^"]*"[^>]*>/g, '')
+		// 1. Удаляем ВСЕ HTML-теги с атрибутами
+		.replace(/<[^>]*>/g, '')
+		// 2. Удаляем ВСЕ data-* атрибуты в любом виде
+		.replace(/data-[a-zA-Z-]+="[^"]*"/g, '')
+		// 3. Удаляем ВСЕ class и style атрибуты
+		.replace(/class="[^"]*"/g, '')
+		.replace(/style="[^"]*"/g, '')
+		// 4. Удаляем ВСЕ оставшиеся HTML-атрибуты
+		.replace(/[a-zA-Z-]+="[^"]*"/g, '')
+		// 5. Удаляем ВСЕ оставшиеся HTML-теги
+		.replace(/<[^>]*>/g, '')
+		// 6. Удаляем ВСЕ оставшиеся символы > и <
+		.replace(/[<>]/g, '')
+		// 7. Схлопываем множественные пробелы
 		.replace(/\s{2,}/g, ' ')
 		.trim()
 
@@ -50,11 +60,30 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 						if (text && info) terms.push({ text, info })
 					}
 					
-					// Форматируем, сохраняя переносы строк (абзацы)
+					// АГРЕССИВНАЯ очистка: убираем ВСЕ HTML-атрибуты и теги
 					const cleanText = json.text
+						// 0. Специфично удаляем паттерны " data-info="">" и подобные
+						.replace(/"\s+data-info="[^"]*"[^>]*>/g, '')
+						.replace(/"\s+data-[a-zA-Z-]+="[^"]*"[^>]*>/g, '')
+						// 1. Удаляем ВСЕ HTML-теги с атрибутами
+						.replace(/<[^>]*>/g, '')
+						// 2. Удаляем ВСЕ data-* атрибуты в любом виде
+						.replace(/data-[a-zA-Z-]+="[^"]*"/g, '')
+						// 3. Удаляем ВСЕ class и style атрибуты
+						.replace(/class="[^"]*"/g, '')
+						.replace(/style="[^"]*"/g, '')
+						// 4. Удаляем ВСЕ оставшиеся HTML-атрибуты
+						.replace(/[a-zA-Z-]+="[^"]*"/g, '')
+						// 5. Удаляем ВСЕ оставшиеся HTML-теги
+						.replace(/<[^>]*>/g, '')
+						// 6. Удаляем ВСЕ оставшиеся символы > и <
+						.replace(/[<>]/g, '')
 						.replace(/\r\n/g, '\n')
+						// Обрабатываем блоки кода с обратными кавычками (```код```)
+						.replace(/```(\w+)?\n?([\s\S]*?)```/g, '<blockquote class="code-block"><pre><code>$2</code></pre></blockquote>')
+						// Обрабатываем inline код с обратными кавычками (`код`)
+						.replace(/`([^`]+)`/g, '<code>$1</code>')
 						.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // **текст** -> <strong>текст</strong>
-						.replace(/`([^`]+)`/g, '<code>$1</code>') // `код` -> <code>код</code>
 						.replace(/[^\S\n]+/g, ' ') // схлопываем только пробельные, кроме перевода строки
 						.trim()
 					
@@ -93,13 +122,29 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 					if (text && info) terms.push({ text, info })
 				}
 				
-				// Форматируем, сохраняя переносы строк (абзацы)
-				const cleanText = json.text
-					.replace(/\r\n/g, '\n')
-					.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-					.replace(/`([^`]+)`/g, '<code>$1</code>')
-					.replace(/[^\S\n]+/g, ' ')
-					.trim()
+									// АГРЕССИВНАЯ очистка: убираем ВСЕ HTML-атрибуты и теги
+					const cleanText = json.text
+						// 1. Удаляем ВСЕ HTML-теги с атрибутами
+						.replace(/<[^>]*>/g, '')
+						// 2. Удаляем ВСЕ data-* атрибуты в любом виде
+						.replace(/data-[a-zA-Z-]+="[^"]*"/g, '')
+						// 3. Удаляем ВСЕ class и style атрибуты
+						.replace(/class="[^"]*"/g, '')
+						.replace(/style="[^"]*"/g, '')
+						// 4. Удаляем ВСЕ оставшиеся HTML-атрибуты
+						.replace(/[a-zA-Z-]+="[^"]*"/g, '')
+						// 5. Удаляем ВСЕ оставшиеся HTML-теги
+						.replace(/<[^>]*>/g, '')
+						// 6. Удаляем ВСЕ оставшиеся символы > и <
+						.replace(/[<>]/g, '')
+						.replace(/\r\n/g, '\n')
+						// Обрабатываем блоки кода с обратными кавычками (```код```)
+						.replace(/```(\w+)?\n?([\s\S]*?)```/g, '<blockquote class="code-block"><pre><code>$2</code></pre></blockquote>')
+						// Обрабатываем inline код с обратными кавычками (`код`)
+						.replace(/`([^`]+)`/g, '<code>$1</code>')
+						.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // **текст** -> <strong>текст</strong>
+						.replace(/[^\S\n]+/g, ' ') // схлопываем только пробельные, кроме перевода строки
+						.trim()
 				
 				// Очищаем термины от лишних пробелов
 				const cleanTerms = terms.map(term => ({
@@ -174,6 +219,31 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 	const text = cleanRaw.trim()
 	if (!text) return null
 
+	// АГРЕССИВНАЯ очистка: убираем ВСЕ HTML-атрибуты и теги
+	const cleanText = text
+		// 0. Специфично удаляем паттерны " data-info="">" и подобные
+		.replace(/"\s+data-info="[^"]*"[^>]*>/g, '')
+		.replace(/"\s+data-[a-zA-Z-]+="[^"]*"[^>]*>/g, '')
+		// 1. Удаляем ВСЕ HTML-теги с атрибутами
+		.replace(/<[^>]*>/g, '')
+		// 2. Удаляем ВСЕ data-* атрибуты в любом виде
+		.replace(/data-[a-zA-Z-]+="[^"]*"/g, '')
+		// 3. Удаляем ВСЕ class и style атрибуты
+		.replace(/class="[^"]*"/g, '')
+		.replace(/style="[^"]*"/g, '')
+		// 4. Удаляем ВСЕ оставшиеся HTML-атрибуты
+		.replace(/[a-zA-Z-]+="[^"]*"/g, '')
+		// 5. Удаляем ВСЕ оставшиеся HTML-теги
+		.replace(/<[^>]*>/g, '')
+		// 6. Удаляем ВСЕ оставшиеся символы > и <
+		.replace(/[<>]/g, '')
+		// Обрабатываем блоки кода с обратными кавычками (```код```)
+		.replace(/```(\w+)?\n?([\s\S]*?)```/g, '<blockquote class="code-block"><pre><code>$2</code></pre></blockquote>')
+		// Обрабатываем inline код с обратными кавычками (`код`)
+		.replace(/`([^`]+)`/g, '<code>$1</code>')
+		.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // **текст** -> <strong>текст</strong>
+		.replace(/\s{2,}/g, ' ') // Схлопываем множественные пробелы
+		.trim()
 
 
 	// Извлекаем потенциальные термины из текста
@@ -192,7 +262,7 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 	const foundTerms = new Set<string>()
 	
 	for (const pattern of termPatterns) {
-		const matches = text.match(pattern)
+		const matches = cleanText.match(pattern)
 		if (matches) {
 			matches.forEach(match => {
 				if (match.length > 2 && !foundTerms.has(match)) {
@@ -207,5 +277,5 @@ export function parseToUiModel(raw: string): ParsedResponse | null {
 	}
 
 	// Возвращаем все найденные термины
-	return { text, terms }
+	return { text: cleanText, terms }
 }

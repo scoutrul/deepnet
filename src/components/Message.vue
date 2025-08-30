@@ -1,5 +1,15 @@
 <template>
-	<div :class="['w-full flex', message.role === 'user' ? 'justify-end' : 'justify-start']">
+	<div class="message-container">
+		<!-- TextSelectionTooltip для выделенного текста -->
+		<TextSelectionTooltip
+			:is-visible="showSelectionTooltip"
+			:selected-text="selectedText"
+			:position="tooltipPosition"
+			@ask-question="handleAskQuestion"
+			@close="hideSelectionTooltip"
+		/>
+		
+		<div :class="['w-full flex', message.role === 'user' ? 'justify-end' : 'justify-start']">
 		<div :class="[
 			'max-w-[80%] rounded-2xl px-3 py-2 shadow-sm border',
 			message.role === 'user' ? 'bg-slate-900 text-slate-50 border-slate-800' : 'bg-white text-slate-900 border-slate-200'
@@ -73,10 +83,12 @@
 			</div>
 		</div>
 	</div>
+	</div>
 </template>
 
 <script>
 import HoverTerm from '@/components/hover/HoverTerm.vue'
+import TextSelectionTooltip from '@/components/TextSelectionTooltip.vue'
 import { splitToParagraphs, applyMarkdownBasic, doubleNewlinesToBr } from '@/utils/text/format'
 import { highlightTerms } from '@/utils/text/highlight'
 
@@ -86,9 +98,27 @@ import { highlightTerms } from '@/utils/text/highlight'
 			message: { type: Object, required: true },
 			queued: { type: Array, default: () => [] },
 		},
-		components: { HoverTerm },
+		components: { HoverTerm, TextSelectionTooltip },
+		data() {
+			return {
+				showSelectionTooltip: false,
+				selectedText: '',
+				tooltipPosition: { x: 0, y: 0 }
+			}
+		},
 		mounted() {
-			
+			this.setupTextSelection()
+		},
+		beforeDestroy() {
+			// Убираем обработчики при уничтожении компонента
+			document.removeEventListener('selectionchange', this.handleSelectionChange)
+			document.removeEventListener('mouseup', this.handleMouseUp)
+			document.removeEventListener('click', this.handleDocumentClick)
+			// Очищаем timeout
+			if (this.selectionTimeout) {
+				clearTimeout(this.selectionTimeout)
+				this.selectionTimeout = null
+			}
 		},
 	computed: {
 		formattedText() {
@@ -97,6 +127,27 @@ import { highlightTerms } from '@/utils/text/highlight'
 			}
 			let text = this.message.parsed.text
 			const terms = this.message.parsed.terms || []
+			
+			// АГРЕССИВНАЯ очистка: убираем ВСЕ HTML-атрибуты и теги
+			text = text
+				// 0. Специфично удаляем паттерны " data-info="">" и подобные
+				.replace(/"\s+data-info="[^"]*"[^>]*>/g, '')
+				.replace(/"\s+data-[a-zA-Z-]+="[^"]*"[^>]*>/g, '')
+				// 1. Удаляем ВСЕ HTML-теги с атрибутами
+				.replace(/<[^>]*>/g, '')
+				// 2. Удаляем ВСЕ data-* атрибуты в любом виде
+				.replace(/data-[a-zA-Z-]+="[^"]*"/g, '')
+				// 3. Удаляем ВСЕ class и style атрибуты
+				.replace(/class="[^"]*"/g, '')
+				.replace(/style="[^"]*"/g, '')
+				// 4. Удаляем ВСЕ оставшиеся HTML-атрибуты
+				.replace(/[a-zA-Z-]+="[^"]*"/g, '')
+				// 5. Удаляем ВСЕ оставшиеся HTML-теги
+				.replace(/<[^>]*>/g, '')
+				// 6. Удаляем ВСЕ оставшиеся символы > и <
+				.replace(/[<>]/g, '')
+				.replace(/\s{2,}/g, ' ') // Схлопываем множественные пробелы
+			
 			// markdown -> html (strong, code)
 			text = applyMarkdownBasic(text)
 			// подсветка терминов
@@ -134,6 +185,71 @@ import { highlightTerms } from '@/utils/text/highlight'
 		},
 	},
 	methods: {
+		setupTextSelection() {
+			// Добавляем обработчики для отслеживания выделения текста
+			document.addEventListener('selectionchange', this.handleSelectionChange)
+			document.addEventListener('mouseup', this.handleMouseUp)
+			document.addEventListener('click', this.handleDocumentClick)
+			// Добавляем задержку для завершения выделения
+			this.selectionTimeout = null
+		},
+		
+		handleSelectionChange() {
+			const selection = window.getSelection()
+			if (selection && selection.toString().trim()) {
+				this.selectedText = selection.toString().trim()
+				// Добавляем задержку для завершения выделения
+				if (this.selectionTimeout) {
+					clearTimeout(this.selectionTimeout)
+				}
+				this.selectionTimeout = setTimeout(() => {
+					this.showSelectionTooltip = true
+				}, 300) // 300ms задержка для завершения выделения
+			} else {
+				this.hideSelectionTooltip()
+			}
+		},
+		
+		handleMouseUp(event) {
+			const selection = window.getSelection()
+			if (selection && selection.toString().trim()) {
+				// Позиционируем ToolTip рядом с курсором
+				this.tooltipPosition = {
+					x: event.clientX,
+					y: event.clientY
+				}
+				this.selectedText = selection.toString().trim()
+				// ToolTip показывается через handleSelectionChange с задержкой
+			}
+		},
+		
+		handleDocumentClick(event) {
+			// Скрываем ToolTip при клике вне его области
+			if (this.showSelectionTooltip) {
+				const tooltip = event.target.closest('.text-selection-tooltip')
+				if (!tooltip) {
+					this.hideSelectionTooltip()
+				}
+			}
+		},
+		
+		hideSelectionTooltip() {
+			this.showSelectionTooltip = false
+			this.selectedText = ''
+			// Очищаем timeout при скрытии
+			if (this.selectionTimeout) {
+				clearTimeout(this.selectionTimeout)
+				this.selectionTimeout = null
+			}
+		},
+		
+		handleAskQuestion(selectedText) {
+			// Эмитим событие для отправки вопроса
+			this.$emit('ask-selected-text', selectedText)
+			// Автоматически скрываем ToolTip после отправки
+			this.hideSelectionTooltip()
+		},
+		
 		handleTermClick(event) {
 			const target = event.target
 			// Сначала проверяем клик по подсвеченному термину
