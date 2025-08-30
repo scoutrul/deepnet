@@ -1,14 +1,30 @@
 <template>
   <div class="voice-panel">
     <div class="panel-header mb-6">
-      <h3 class="text-xl font-semibold text-slate-900">🎤 Голосовая стенография</h3>
-      <p class="text-sm text-slate-600 mt-2">
-        Говорите свободно - система автоматически разобьет речь на фразы и создаст интерактивные теги
-      </p>
+      <button
+        @click="toggleCollapse"
+        class="flex items-center justify-between w-full text-left hover:bg-slate-50 rounded-lg p-3 transition-colors"
+      >
+        <div>
+          <h3 class="text-xl font-semibold text-slate-900">🎤 Голосовая стенография</h3>
+          <p class="text-sm text-slate-600 mt-2">
+            Говорите свободно - система автоматически разобьет речь на фразы и создаст интерактивные теги
+          </p>
+        </div>
+        <svg
+          class="w-6 h-6 text-slate-500 transition-transform duration-200"
+          :class="{ 'rotate-180': !isCollapsed }"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
     </div>
 
     <!-- Tag Feed and Controls in a column layout -->
-    <div class="flex flex-col gap-6">
+    <div v-if="!isCollapsed" class="flex flex-col gap-6">
       <!-- Tag Feed - Main Content -->
       <div>
         <TagFeed
@@ -25,7 +41,7 @@
     </div>
 
                   <!-- Управление записью - отдельная строка -->
-              <div v-if="isRecording || (tags.length > 0 && !isRecording)" class="recording-controls-row mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+              <div v-if="!isCollapsed && (isRecording || (tags.length > 0 && !isRecording))" class="recording-controls-row mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
                 <div class="flex items-center justify-between">
                   <!-- Кнопка остановки/перезапуска слева -->
                   <button
@@ -87,7 +103,8 @@ export default {
       isRecording: false,
       isPaused: false,
       error: null,
-      confidence: 0
+      confidence: 0,
+      isCollapsed: true // Изначально закрыт
     }
   },
   mounted() {
@@ -301,6 +318,10 @@ export default {
       } else {
         return 'Плохой'
       }
+    },
+
+    toggleCollapse() {
+      this.isCollapsed = !this.isCollapsed
     }
   },
 
