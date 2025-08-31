@@ -92,6 +92,12 @@ export default {
   components: {
     VoiceTag
   },
+  data() {
+    return {
+      // Максимум отображаемых тегов
+      MAX_DISPLAY_TAGS: 25
+    }
+  },
   props: {
     tags: {
       type: Array,
@@ -118,12 +124,9 @@ export default {
     }
   },
   computed: {
-    // Стакан на 10 последних тегов с дедупликацией
+    // Простое отображение последних MAX_DISPLAY_TAGS тегов
     displayTags() {
-      // Создаем Map для отслеживания уникальных фраз
-      const uniquePhrases = new Map()
-      
-      // Обрабатываем теги в хронологическом порядке (новые последние)
+      // Фильтруем и обрабатываем теги
       const processedTags = this.tags
         .filter(tag => tag && tag.isVisible !== false)
         .filter(tag => {
@@ -136,22 +139,23 @@ export default {
           ...tag,
           displayText: this.mergeCyclicWords(tag.text)
         }))
-        .reverse() // Разворачиваем для обработки от старых к новым
       
-      // Собираем уникальные фразы, сохраняя только последние вхождения
-      for (const tag of processedTags) {
-        const normalizedText = this.normalizePhrase(tag.displayText)
-        if (!uniquePhrases.has(normalizedText)) {
-          uniquePhrases.set(normalizedText, tag)
-        }
-      }
+      // Просто берем последние MAX_DISPLAY_TAGS тегов
+      const displayTags = processedTags
+        .slice(-this.MAX_DISPLAY_TAGS)
+        .reverse() // Новые сверху
       
-      // Берем только последние 10 уникальных тегов
-      const uniqueTags = Array.from(uniquePhrases.values())
-        .slice(-10)
-        .reverse() // Возвращаем к порядку: новые сверху
+      // Логируем для отладки
+      console.log('🎤 [TAGFEED] Simple display computed:', {
+        totalTags: this.tags.length,
+        processedTags: processedTags.length,
+        maxDisplayTags: this.MAX_DISPLAY_TAGS,
+        finalDisplayTags: displayTags.length,
+        firstTag: displayTags[0]?.displayText?.substring(0, 30),
+        lastTag: displayTags[displayTags.length - 1]?.displayText?.substring(0, 30)
+      })
       
-      return uniqueTags
+      return displayTags
     },
 
     stats() {
@@ -248,6 +252,16 @@ export default {
         
         // Иначе возвращаем более длинное слово
         return word1.length >= word2.length ? word1 : word2
+      }
+    },
+    
+    // Метод для изменения максимального количества отображаемых тегов
+    setMaxDisplayTags(maxTags) {
+      if (maxTags > 0 && maxTags <= 100) {
+        this.MAX_DISPLAY_TAGS = maxTags
+        console.log('🎤 [TAGFEED] Max display tags changed to:', maxTags)
+      } else {
+        console.warn('🎤 [TAGFEED] Invalid max tags value:', maxTags, 'Must be between 1 and 100')
       }
     }
   },
