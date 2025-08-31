@@ -57,6 +57,16 @@ class WebSpeechVoiceService implements VoiceRecognitionService {
   // Отслеживание уже созданных фраз для дедупликации
   private createdPhrases: Set<string> = new Set()
   private phraseBuffer: Map<string, { confidence: number, timestamp: number }> = new Map()
+  
+  // Динамичные таймауты для автоматического добавления слов
+  private readonly WORD_TIMEOUT_MS = 1500        // Основной таймаут: 1.5 секунды
+  private readonly QUICK_WORD_TIMEOUT_MS = 800   // Быстрый таймаут: 0.8 секунды
+  private readonly MIN_WORD_LENGTH = 3           // Минимальная длина слова для добавления
+  
+  private wordTimeoutTimers: Map<string, NodeJS.Timeout> = new Map()
+  private lastWordUpdateTime: number = 0
+  private consecutiveWordCount: number = 0       // Счетчик последовательных слов
+  private lastWordBuffer: string[] = []          // Буфер последних слов
 
   constructor() {
     console.log('🎤 [VOICE] WebSpeechVoiceService constructor called')
@@ -264,13 +274,24 @@ class WebSpeechVoiceService implements VoiceRecognitionService {
       timestamp: new Date().toISOString()
     })
     
-    // Буферизуем промежуточные фразы вместо создания тегов
+    // Буферизуем промежуточные фразы и добавляем слова по таймауту
     const words = text.trim().split(/\s+/)
     if (words.length === 0) {
       console.log('🎤 [VOICE] No words to buffer, returning')
       return
     }
     
+    // Обновляем время последнего обновления
+    this.lastWordUpdateTime = Date.now()
+    
+    // Обрабатываем каждое слово отдельно для таймаута
+    words.forEach((word, index) => {
+      if (word.trim() && word.length > 1) {
+        this.scheduleWordTimeout(word.trim(), confidence, index)
+      }
+    })
+    
+    // Также создаем фразы по 2-3 слова для буфера
     const phraseSize = 3
     const phrases: string[] = []
     
@@ -308,8 +329,173 @@ class WebSpeechVoiceService implements VoiceRecognitionService {
     console.log('🎤 [VOICE] Interim buffering completed:', {
       totalPhrases: phrases.length,
       updatedPhrases: updatedPhrases,
-      bufferSize: this.phraseBuffer.size
+      bufferSize: this.phraseBuffer.size,
+      wordsProcessed: words.length
     })
+  }
+  
+  // Планирует динамичные таймауты для автоматического добавления слова
+  private scheduleWordTimeout(word: string, confidence: number, wordIndex: number) {
+    const wordKey = `${word}_${wordIndex}_${Date.now()}`
+    
+    // Отменяем предыдущий таймер для этого слова, если он есть
+    const existingTimer = this.wordTimeoutTimers.get(wordKey)
+    if (existingTimer) {
+      clearTimeout(existingTimer)
+      this.wordTimeoutTimers.delete(wordKey)
+    }
+    
+    // Обновляем буфер последних слов
+    this.updateWordBuffer(word)
+    
+    // Определяем динамический таймаут на основе контекста
+    const dynamicTimeout = this.calculateDynamicTimeout(word, confidence)
+    
+    // Создаем новый таймер с динамическим таймаутом
+    const timer = setTimeout(() => {
+      this.addWordByTimeout(word, confidence, wordKey)
+    }, dynamicTimeout)
+    
+    // Сохраняем таймер
+    this.wordTimeoutTimers.set(wordKey, timer)
+    
+    console.log('🎤 [VOICE] Scheduled dynamic word timeout:', {
+      word: word,
+      wordIndex: wordIndex,
+      wordKey: wordKey,
+      dynamicTimeout: dynamicTimeout,
+      consecutiveWordCount: this.consecutiveWordCount,
+      bufferSize: this.lastWordBuffer.length,
+      timestamp: new Date().toISOString()
+    })
+  }
+  
+  // Добавляет слово по таймауту
+  private addWordByTimeout(word: string, confidence: number, wordKey: string) {
+    // Проверяем, не было ли слово уже добавлено как часть фразы
+    if (this.createdPhrases.has(word.toLowerCase())) {
+      console.log('🎤 [VOICE] Word already exists, skipping timeout addition:', word)
+      return
+    }
+    
+    // Проверяем, прошло ли достаточно времени с последнего обновления
+    const timeSinceLastUpdate = Date.now() - this.lastWordUpdateTime
+    const minRequiredTime = Math.min(this.WORD_TIMEOUT_MS, this.QUICK_WORD_TIMEOUT_MS)
+    
+    if (timeSinceLastUpdate < minRequiredTime) {
+      console.log('🎤 [VOICE] Recent update detected, skipping timeout addition:', {
+        word: word,
+        timeSinceLastUpdate: timeSinceLastUpdate,
+        threshold: minRequiredTime,
+        consecutiveWordCount: this.consecutiveWordCount
+      })
+      return
+    }
+    
+    // Добавляем слово как отдельную фразу
+    console.log('🎤 [VOICE] Adding word by dynamic timeout:', {
+      word: word,
+      confidence: confidence.toFixed(3),
+      timeSinceLastUpdate: timeSinceLastUpdate,
+      consecutiveWordCount: this.consecutiveWordCount,
+      bufferSize: this.lastWordBuffer.length,
+      timestamp: new Date().toISOString()
+    })
+    
+    // Добавляем в созданные фразы
+    this.createdPhrases.add(word.toLowerCase())
+    
+    // Уведомляем о завершении фразы (слова)
+    this.notifyPhraseComplete(word, confidence)
+    
+    // Обновляем статистику
+    this.updateState({
+      ...this.currentState,
+      phraseCount: this.currentState.phraseCount + 1
+    })
+    
+    // Сбрасываем счетчик последовательных слов
+    this.consecutiveWordCount = 0
+    
+    // Удаляем таймер
+    this.wordTimeoutTimers.delete(wordKey)
+  }
+  
+  // Обновляет буфер последних слов для анализа контекста
+  private updateWordBuffer(word: string) {
+    // Добавляем новое слово в буфер
+    this.lastWordBuffer.push(word.toLowerCase())
+    
+    // Ограничиваем размер буфера (последние 10 слов)
+    if (this.lastWordBuffer.length > 10) {
+      this.lastWordBuffer.shift()
+    }
+    
+    // Обновляем счетчик последовательных слов
+    this.consecutiveWordCount++
+    
+    // Сбрасываем счетчик если прошло много времени
+    if (this.lastWordUpdateTime > 0) {
+      const timeSinceLastUpdate = Date.now() - this.lastWordUpdateTime
+      if (timeSinceLastUpdate > 5000) { // 5 секунд
+        this.consecutiveWordCount = 1
+      }
+    }
+    
+    console.log('🎤 [VOICE] Word buffer updated:', {
+      word: word,
+      bufferSize: this.lastWordBuffer.length,
+      consecutiveWordCount: this.consecutiveWordCount,
+      lastWords: this.lastWordBuffer.slice(-3) // Последние 3 слова
+    })
+  }
+  
+  // Вычисляет динамический таймаут на основе контекста
+  private calculateDynamicTimeout(word: string, confidence: number): number {
+    // Базовый таймаут
+    let timeout = this.WORD_TIMEOUT_MS
+    
+    // Если слово короткое, используем быстрый таймаут
+    if (word.length <= this.MIN_WORD_LENGTH) {
+      timeout = this.QUICK_WORD_TIMEOUT_MS
+    }
+    
+    // Если много последовательных слов, уменьшаем таймаут
+    if (this.consecutiveWordCount > 3) {
+      timeout = Math.max(timeout * 0.7, 500) // Уменьшаем на 30%, минимум 500мс
+    }
+    
+    // Если высокая уверенность, уменьшаем таймаут
+    if (confidence > 0.9) {
+      timeout = Math.max(timeout * 0.8, 400) // Уменьшаем на 20%, минимум 400мс
+    }
+    
+    // Если в буфере много похожих слов, увеличиваем таймаут
+    const similarWords = this.lastWordBuffer.filter(w => 
+      w !== word.toLowerCase() && 
+      (w.includes(word.toLowerCase()) || word.toLowerCase().includes(w))
+    ).length
+    
+    if (similarWords > 2) {
+      timeout = Math.min(timeout * 1.5, 2000) // Увеличиваем на 50%, максимум 2 сек
+    }
+    
+    console.log('🎤 [VOICE] Dynamic timeout calculated:', {
+      word: word,
+      baseTimeout: this.WORD_TIMEOUT_MS,
+      finalTimeout: timeout,
+      confidence: confidence.toFixed(3),
+      consecutiveWordCount: this.consecutiveWordCount,
+      similarWords: similarWords,
+      factors: {
+        shortWord: word.length <= this.MIN_WORD_LENGTH,
+        manyConsecutive: this.consecutiveWordCount > 3,
+        highConfidence: confidence > 0.9,
+        manySimilar: similarWords > 2
+      }
+    })
+    
+    return timeout
   }
 
   private createPhrasesFromText(text: string, confidence: number, _isComplete: boolean = true) {
@@ -690,6 +876,21 @@ class WebSpeechVoiceService implements VoiceRecognitionService {
       this.recognition.stop()
       console.log('🎤 [VOICE] recognition.stop() called successfully')
       
+      // Очищаем таймеры слов и буферы при остановке
+      console.log('🎤 [VOICE] Clearing word timers and buffers on stop:', {
+        timers: this.wordTimeoutTimers.size,
+        bufferSize: this.lastWordBuffer.length,
+        consecutiveCount: this.consecutiveWordCount
+      })
+      
+      this.wordTimeoutTimers.forEach((timer) => {
+        clearTimeout(timer)
+      })
+      this.wordTimeoutTimers.clear()
+      this.lastWordUpdateTime = 0
+      this.consecutiveWordCount = 0
+      this.lastWordBuffer = []
+      
       this.updateState({
         status: 'stopped',
         isListening: false,
@@ -706,6 +907,21 @@ class WebSpeechVoiceService implements VoiceRecognitionService {
       console.log('🎤 [VOICE] Pausing recognition, current status:', this.currentState.status)
       this.recognition.stop()
       console.log('🎤 [VOICE] recognition.stop() called for pause')
+      
+      // Очищаем таймеры слов и буферы при паузе
+      console.log('🎤 [VOICE] Clearing word timers and buffers on pause:', {
+        timers: this.wordTimeoutTimers.size,
+        bufferSize: this.lastWordBuffer.length,
+        consecutiveCount: this.consecutiveWordCount
+      })
+      
+      this.wordTimeoutTimers.forEach((timer) => {
+        clearTimeout(timer)
+      })
+      this.wordTimeoutTimers.clear()
+      this.lastWordUpdateTime = 0
+      this.consecutiveWordCount = 0
+      this.lastWordBuffer = []
       
       this.updateState({
         status: 'paused',
@@ -806,6 +1022,21 @@ class WebSpeechVoiceService implements VoiceRecognitionService {
       
       this.createdPhrases.clear()
       this.phraseBuffer.clear()
+      
+      // Очищаем таймеры слов и буферы
+      console.log('🎤 [VOICE] Clearing word timers and buffers:', {
+        timers: this.wordTimeoutTimers.size,
+        bufferSize: this.lastWordBuffer.length,
+        consecutiveCount: this.consecutiveWordCount
+      })
+      
+      this.wordTimeoutTimers.forEach((timer) => {
+        clearTimeout(timer)
+      })
+      this.wordTimeoutTimers.clear()
+      this.lastWordUpdateTime = 0
+      this.consecutiveWordCount = 0
+      this.lastWordBuffer = []
       
       console.log('🎤 [VOICE] Cleanup completed successfully')
     } catch (error) {
