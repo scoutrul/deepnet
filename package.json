@@ -23,6 +23,8 @@
 	"dependencies": {
 		"@anthropic-ai/sdk": "0.60.0",
 		"@vue/composition-api": "^1.7.2",
+		"babel-runtime": "^6.26.0",
+		"markdown-it": "^14.1.0",
 		"uuid": "^9.0.1",
 		"vue": "^2.7.16",
 		"vue-template-compiler": "^2.7.16"

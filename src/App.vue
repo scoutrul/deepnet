@@ -13,9 +13,9 @@
 				<div class="col-span-2">
 					<div class="flex flex-col rounded-xl border border-slate-200 bg-white">
 						<div class="px-4 py-4 space-y-3">
-							<Message v-for="m in messages" :key="m.id" :message="m" :queued="queuedTerms"
-								@click-term="onClickTerm" @queue-term="onQueueTerm" @retry="onRetry"
-								@clarify="onClarify" @ask-selected-text="onAskSelectedText" />
+									<Message v-for="m in messages" :key="m.id" :message="m" :queued="queuedTerms"
+			@retry="onRetry" @clarify="onClarify"
+			@word-click="onWordClick" />
 							<div v-if="draft" class="w-full flex justify-end">
 								<div
 									class="max-w-[80%] rounded-2xl px-3 py-2 shadow-sm border bg-slate-900 text-slate-50 border-slate-800">
@@ -43,11 +43,7 @@
 				</div>
 			</div>
 
-			<div v-if="isDev" class="mt-4 rounded-xl border border-slate-200 bg-white p-3">
-				<div class="mb-2 text-xs font-semibold text-slate-700">Отладка: тело запроса</div>
-				<pre
-					class="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-slate-900 p-3 text-xs text-slate-100"><code>{{ lastRequestPreview }}</code></pre>
-			</div>
+
 		</div>
 	</div>
 </template>
@@ -89,8 +85,6 @@ export default {
 				resumeText: ''
 			},
 			queuedTerms: [],
-			lastRequestPreview: '{\n  "status": "ожидание первого запроса"\n}',
-			isDev: !!import.meta.env.DEV,
 			draft: '',
 			shouldAutoScroll: true,
 		}
@@ -194,50 +188,18 @@ export default {
 			}
 		},
 		
-		onAskSelectedText(selectedText) {
-			if (selectedText?.trim()) {
-				// Отправляем вопрос по выделенному тексту
+
+		
+		onWordClick(wordData) {
+			if (wordData?.word?.trim()) {
 				this.shouldAutoScroll = true
 				this.$refs.chatInput?.clear?.()
-				this.ask(`Ответь от пользователя на этот вопрос: ${selectedText}`)
+				
+				// Отправляем только слово, без контекста
+				this.ask(`Расскажи подробнее о "${wordData.word}"`)
 			}
 		},
-		previewRequest(question, previousAssistantText) {
-			const model = import.meta.env.VITE_CHAT_MODEL || 'gpt-4o'
-			const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'https://openrouter.ai/api/v1'
-			const level = this.options.detailLevel || 'extended'
-			const tuning = level === 'short' ? { temperature: 0.3, max_tokens: 200 } : level === 'max' ? { temperature: 0.7, max_tokens: 1500 } : { temperature: 0.5, max_tokens: 500 }
-			const systemPrompt = this.buildSystemPrompt()
 
-			// Формируем сообщения в зависимости от наличия системного промпта
-			const messages = []
-			if (systemPrompt && systemPrompt.trim()) {
-				messages.push({ role: 'system', content: systemPrompt })
-			}
-
-			let previousIncluded = false
-			let previousSnippet = ''
-			if (this.options.usePrev && previousAssistantText) {
-				messages.push({ role: 'assistant', content: previousAssistantText })
-				previousIncluded = true
-				previousSnippet = String(previousAssistantText).slice(0, 160)
-			}
-			messages.push({ role: 'user', content: question })
-
-			this.lastRequestPreview = JSON.stringify({
-				url: `${apiBaseUrl}/chat/completions`,
-				options: {
-					includePreviousContext: !!this.options.usePrev,
-					previousAssistantIncluded: previousIncluded,
-					previousAssistantSnippet: previousSnippet,
-					scene: this.options.scene || 'не выбрана',
-					hasSystemPrompt: !!(systemPrompt && systemPrompt.trim()),
-					hasJobContext: !!(this.options.jobDescription && this.options.jobDescription.trim()),
-					hasResumeContext: !!(this.options.resumeText && this.options.resumeText.trim())
-				},
-				body: { model, messages, ...tuning }
-			}, null, 2)
-		},
 		onTagSelected(tagData) {
 			const { text, action } = tagData
 			if (action === 'add-to-input') {
@@ -277,7 +239,7 @@ export default {
 
 
 				}
-				this.previewRequest(question, previousAssistantText)
+
 				const assistant = await chatService.ask(question, {
 					usePreviousContext: !!this.options.usePrev,
 					previousAssistantText,
@@ -380,7 +342,6 @@ export default {
 						.trim()
 				}
 
-				this.previewRequest(question, previousAssistantText)
 				const systemPrompt = '[generated in chatService]'
 
 
@@ -462,7 +423,6 @@ export default {
 				}
 
 				// Для уточнений ВСЕГДА используем предыдущий контекст и специальный промпт
-				this.previewRequest(question, previousAssistantText)
 				const assistant = await chatService.ask(question, {
 					usePreviousContext: true, // Принудительно включаем контекст для уточнений
 					previousAssistantText,

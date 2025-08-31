@@ -118,7 +118,7 @@ export default {
     }
   },
   computed: {
-    // Стакан на 50 последних тегов с дедупликацией
+    // Стакан на 10 последних тегов с дедупликацией
     displayTags() {
       // Создаем Map для отслеживания уникальных фраз
       const uniquePhrases = new Map()
@@ -146,9 +146,9 @@ export default {
         }
       }
       
-      // Берем только последние 50 уникальных тегов
+      // Берем только последние 10 уникальных тегов
       const uniqueTags = Array.from(uniquePhrases.values())
-        .slice(-50)
+        .slice(-10)
         .reverse() // Возвращаем к порядку: новые сверху
       
       return uniqueTags
