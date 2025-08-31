@@ -15,7 +15,7 @@
 						<div class="px-4 py-4 space-y-3">
 									<Message v-for="m in messages" :key="m.id" :message="m" :queued="queuedTerms"
 			@retry="onRetry" @clarify="onClarify"
-			@word-click="onWordClick" />
+			@word-click="onWordClick" @respond-as-user="onRespondAsUser" @continue-as-bot="onContinueAsBot" />
 							<div v-if="draft" class="w-full flex justify-end">
 								<div
 									class="max-w-[80%] rounded-2xl px-3 py-2 shadow-sm border bg-slate-900 text-slate-50 border-slate-800">
@@ -185,6 +185,156 @@ export default {
 				setTimeout(() => {
 					this.options.detailLevel = originalLevel
 				}, 0)
+			}
+		},
+		
+		onRespondAsUser(text) {
+			if (text?.trim()) {
+				// Отправляем запрос от лица пользователя
+				this.shouldAutoScroll = true
+				this.$refs.chatInput?.clear?.()
+				
+				// Получаем историю двух последних вопросов и ответов
+				const context = this.buildRecentContext()
+				
+				// Отправляем простой запрос, а контекст передаем через системный промпт
+				this.askWithContext('Ответь на это сообщение используя роль пользователя', context)
+			}
+		},
+		
+		onContinueAsBot(text) {
+			if (text?.trim()) {
+				// Продолжаем беседу от лица бота
+				this.shouldAutoScroll = true
+				this.$refs.chatInput?.clear?.()
+				
+				// Получаем историю двух последних вопросов и ответов
+				const context = this.buildRecentContext()
+				
+				// Отправляем простой запрос, а контекст передаем через системный промпт
+				this.askWithContext('Продолжи беседу от лица бота, развивая эту тему', context)
+			}
+		},
+		
+		buildRecentContext() {
+			// Получаем последние сообщения (максимум 4 - 2 вопроса + 2 ответа)
+			const recentMessages = this.messages
+				.filter(m => m.role === 'user' || m.role === 'assistant')
+				.slice(-4)
+			
+			if (recentMessages.length === 0) {
+				return ''
+			}
+			
+			// Формируем контекст из последних сообщений
+			let context = 'Контекст последних сообщений:\n'
+			
+			recentMessages.forEach((message, index) => {
+				const role = message.role === 'user' ? 'Пользователь' : 'Бот'
+				const content = message.parsed?.text || message.content || ''
+				
+				// Очищаем HTML теги и ограничиваем длину
+				const cleanContent = content
+					.replace(/<[^>]*>/g, '')
+					.replace(/&[a-zA-Z]+;/g, '')
+					.trim()
+					.slice(0, 200) // Ограничиваем длину каждого сообщения
+				
+				if (cleanContent) {
+					context += `${index + 1}. ${role}: ${cleanContent}\n`
+				}
+			})
+			
+			return context.trim()
+		},
+		
+		async askWithContext(question, context) {
+			const userMsg = { id: uuid(), role: 'user', content: question, createdAt: Date.now() }
+			this.messages.push(userMsg)
+			
+			// typing placeholder
+			const typingId = uuid()
+			this.messages.push({ id: typingId, role: 'assistant', content: '', typing: true, createdAt: Date.now() })
+			this.loading = true
+			const started = Date.now()
+			
+			try {
+				const lastAssistant = [...this.messages].reverse().find(m => m.role === 'assistant' && (m.parsed?.text || m.content))
+				let previousAssistantText = lastAssistant?.parsed?.text || lastAssistant?.content || ''
+
+				// Очищаем HTML теги из предыдущего контекста
+				if (previousAssistantText) {
+					previousAssistantText = previousAssistantText
+						.replace(/<[^>]*>/g, '') // Убираем все HTML теги
+						.replace(/&[a-zA-Z]+;/g, '') // Убираем HTML entities
+						.trim()
+				}
+
+				// Создаем расширенный системный промпт с контекстом
+				let enhancedSystemPrompt = this.buildSystemPrompt()
+				if (context && context.trim()) {
+					if (enhancedSystemPrompt) {
+						enhancedSystemPrompt += '\n\n' + context
+					} else {
+						enhancedSystemPrompt = context
+					}
+				}
+
+				const assistant = await chatService.ask(question, {
+					usePreviousContext: !!this.options.usePrev,
+					previousAssistantText,
+					detailLevel: this.options.detailLevel,
+					systemPrompt: enhancedSystemPrompt,
+				})
+
+				const elapsed = Date.now() - started
+				const delay = Math.max(0, 300 - elapsed)
+				await new Promise(r => setTimeout(r, delay))
+				const idx = this.messages.findIndex(m => m.id === typingId)
+				if (idx !== -1) this.messages.splice(idx, 1)
+
+				// Создаем сообщение
+				const messageData = {
+					id: uuid(),
+					role: 'assistant',
+					content: assistant.parsed?.text || assistant.raw,
+					parsed: assistant.parsed,
+					createdAt: Date.now()
+				}
+
+				// Если это таймаут, добавляем специальные поля
+				if (assistant.isTimeout) {
+					messageData.isTimeout = true
+					messageData.originalQuestion = assistant.originalQuestion
+				}
+
+				// Если это ошибка API, добавляем специальные поля
+				if (assistant.isError) {
+					messageData.error = true
+					messageData.content = assistant.raw
+					messageData.originalQuestion = assistant.originalQuestion
+				}
+
+				this.messages.push(messageData)
+				this.queuedTerms = []
+				this.$refs.chatInput?.focus?.()
+				this.draft = ''
+			} catch (e) {
+				const idx = this.messages.findIndex(m => m.id === typingId)
+				if (idx !== -1) this.messages.splice(idx, 1)
+				this.messages.push({
+					id: uuid(),
+					role: 'assistant',
+					content: '',
+					error: e?.message || 'Error',
+					originalQuestion: question,
+					createdAt: Date.now()
+				})
+				this.queuedTerms = []
+				this.$refs.chatInput?.focus?.()
+				this.draft = ''
+			} finally {
+				this.loading = false
 			}
 		},
 		
@@ -512,6 +662,20 @@ export default {
 			if (this.options.resumeText && this.options.resumeText.trim()) {
 				if (prompt) prompt += '\n\n'
 				prompt += `📄 КОНТЕКСТ РЕЗЮМЕ:\n${this.options.resumeText.trim()}`
+			}
+
+			// Добавляем инструкции по приветствиям
+			if (prompt) {
+				prompt += '\n\n'
+				prompt += `🚫 ВАЖНО: ПРАВИЛА ПРИВЕТСТВИЙ
+
+- Если это уже не первое сообщение в беседе - НЕ ЗДОРОВАЙСЯ!
+- Если уже поздоровались один раз - больше не здоровайся!
+- Сразу переходи к делу и отвечай на вопросы
+- Не трать время на формальности и вежливости
+- Фокусируйся на содержании и задачах
+
+ПОМНИ: Ты уже знаком с пользователем, здороваться поздно!`
 			}
 
 			// Если ничего не выбрано и нет контекста, возвращаем пустую строку
