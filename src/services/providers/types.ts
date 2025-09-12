@@ -6,6 +6,7 @@ export interface ProviderRequest {
   model: string
   timeoutMs: number
   apiKey: string
+  apiBaseUrl?: string
   temperature?: number
   maxTokens?: number
   previousAssistantContent?: string

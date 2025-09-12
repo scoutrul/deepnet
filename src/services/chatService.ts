@@ -4,18 +4,19 @@ import { AnthropicProvider } from '@/services/providers/anthropicProvider'
 import type { ChatProvider } from '@/services/providers/types'
 import { parseToUiModel } from '@/services/responseParser'
 import type { ParsedResponse } from '@/types/ai'
+import { appConfig } from '../config/appConfig'
 
-const MODEL = import.meta.env.VITE_CHAT_MODEL || 'gpt-4o'
-const TIMEOUT_MS = Number(import.meta.env.VITE_REQUEST_TIMEOUT_MS || 5000)
-const ANTHROPIC_API_KEY = import.meta.env.VITE_ANTHROPIC_API_KEY || ''
+const MODEL = appConfig.llm.model || 'gpt-4o'
+const TIMEOUT_MS = appConfig.request.timeout || 5000
+const ANTHROPIC_API_KEY = appConfig.anthropic.apiKey || ''
 
 export const chatService = {
 	async ask(question: string, opts?: { usePreviousContext?: boolean; previousAssistantText?: string; detailLevel?: 'short' | 'extended' | 'max'; systemPrompt?: string }): Promise<{ raw: string; parsed: ParsedResponse | null; isTimeout: boolean; isError: boolean; originalQuestion?: string; isCreditLimit?: boolean; availableTokens?: number }> {
 		// Проверяем обязательные переменные окружения
-		if (!import.meta.env.VITE_CHAT_MODEL) {
+		if (!appConfig.llm.model) {
 			throw new Error('Отсутствует VITE_CHAT_MODEL')
 		}
-		if (!import.meta.env.VITE_API_BASE_URL) {
+		if (!appConfig.llm.baseUrl) {
 			throw new Error('Отсутствует VITE_API_BASE_URL')
 		}
 		
@@ -53,15 +54,15 @@ export const chatService = {
 			provider = new AnthropicProvider()
 		} else {
 			// Для OpenRouter проверяем наличие API ключа
-			const openRouterApiKey = import.meta.env.VITE_OPENROUTER_API_KEY
-			if (!openRouterApiKey) {
-				throw new Error('Отсутствует VITE_OPENROUTER_API_KEY для OpenRouter')
-			}
+		const openRouterApiKey = appConfig.llm.apiKey
+		if (!openRouterApiKey) {
+			throw new Error('Отсутствует VITE_OPENROUTER_API_KEY для OpenRouter')
+		}
 			provider = new OpenRouterProvider()
 		}
 		
 		// Получаем API ключ для выбранного провайдера
-		const providerApiKey = isAnthropic ? ANTHROPIC_API_KEY : import.meta.env.VITE_OPENROUTER_API_KEY
+		const providerApiKey = isAnthropic ? ANTHROPIC_API_KEY : (appConfig.llm.apiKey || '')
 
 		const result = await provider.complete({
 			systemPrompt,
@@ -69,10 +70,11 @@ export const chatService = {
 			model: MODEL,
 			timeoutMs: TIMEOUT_MS,
 			apiKey: providerApiKey,
+			apiBaseUrl: appConfig.llm.baseUrl,
 			temperature,
 			maxTokens,
-			referrer: import.meta.env.VITE_HTTP_REFERRER || location.origin,
-			title: import.meta.env.VITE_APP_TITLE || 'DeepNet Encyclopedia',
+                    referrer: appConfig.request.referrer || location.origin,
+                    title: appConfig.app.name || 'DeepNet Context System',
 			previousAssistantContent: opts?.usePreviousContext ? (opts?.previousAssistantText || '') : undefined,
 		})
 		

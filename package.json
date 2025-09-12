@@ -22,6 +22,7 @@
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "0.60.0",
+		"@deepgram/sdk": "^4.11.2",
 		"@vue/composition-api": "^1.7.2",
 		"babel-runtime": "^6.26.0",
 		"markdown-it": "^14.1.0",

@@ -2,7 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { ChatProvider, ProviderRequest } from './types'
 import type { FetchCompletionResult } from '@/types/ai'
 
-export class AnthropicProvider implements ChatProvider {
+class AnthropicProvider implements ChatProvider {
   async complete(params: ProviderRequest): Promise<FetchCompletionResult> {
     const client = new Anthropic({ apiKey: params.apiKey, dangerouslyAllowBrowser: true })
 
@@ -43,5 +43,7 @@ export class AnthropicProvider implements ChatProvider {
     }
   }
 }
+
+export { AnthropicProvider }
 
 

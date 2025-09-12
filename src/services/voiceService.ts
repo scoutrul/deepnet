@@ -1086,3 +1086,6 @@ export function getSupportedLanguages(): string[] {
     'zh-CN'  // Chinese (Simplified)
   ]
 }
+
+// Export WebSpeechVoiceService class
+export { WebSpeechVoiceService }
