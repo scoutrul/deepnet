@@ -196,7 +196,10 @@
               </div>
               
               <h4 class="font-semibold text-gray-800 mb-2">{{ result.title }}</h4>
-              <p class="text-gray-600 mb-3">{{ result.content }}</p>
+              <div 
+                class="text-gray-600 mb-3 search-result-content"
+                v-html="getFormattedContent(result.content)"
+              ></div>
               
               <div class="flex items-center text-xs text-gray-500">
                 <span class="mr-4">Источник: {{ getSourceText(result.source) }}</span>
@@ -266,6 +269,7 @@
 
 <script>
 import { SearchService, contextManager, searchService } from '../../services/context'
+import MarkdownIt from 'markdown-it'
 
 export default {
   name: 'SearchPanel',
@@ -284,7 +288,29 @@ export default {
         priority: [],
         sources: ['llm', 'rule', 'pattern', 'dialog']
       },
-      searchService: null
+      searchService: null,
+      md: new MarkdownIt({
+        html: false,
+        linkify: true,
+        typographer: true,
+        breaks: true,
+        listIndent: 1,
+        strict: false,
+        enable: [
+          'list',
+          'newline',
+          'emphasis',
+          'code',
+          'link',
+          'image',
+          'blockquote',
+          'heading',
+          'hr',
+          'table'
+        ],
+        quotes: ['«', '»', '‹', '›']
+      }),
+      contentCache: new Map()
     }
   },
   mounted() {
@@ -312,6 +338,9 @@ export default {
       this.isSearching = true
       this.searchResults = null
       this.contextualAnswer = ''
+      
+      // Очищаем кэш контента при новом поиске
+      this.contentCache.clear()
       
       try {
         const context = contextManager.getFullContext()
@@ -390,6 +419,7 @@ export default {
       this.searchQuery = ''
       this.searchResults = null
       this.contextualAnswer = ''
+      this.contentCache.clear()
     },
     
     // Загрузка запроса из истории
@@ -557,6 +587,108 @@ export default {
     showSuccess(message) {
       // Здесь можно добавить уведомления
       console.log(message)
+    },
+    
+    // Получение форматированного контента с кэшированием
+    getFormattedContent(content) {
+      if (!content) return ''
+      
+      // Проверяем кэш
+      if (this.contentCache.has(content)) {
+        return this.contentCache.get(content)
+      }
+      
+      // Форматируем и кэшируем
+      const formatted = this.formatSearchResult(content)
+      this.contentCache.set(content, formatted)
+      
+      return formatted
+    },
+    
+    // Форматирование текста результата поиска
+    formatSearchResult(content) {
+      if (!content) return ''
+      
+      // Предобработка текста для улучшения markdown
+      const processedText = this.preprocessTextForMarkdown(content)
+      
+      // Рендеринг markdown
+      return this.md.render(processedText)
+    },
+    
+    // Предобработка текста для markdown (аналогично Message.vue)
+    preprocessTextForMarkdown(text) {
+      if (!text) return text
+      
+      console.log('🔍 [SEARCH] Preprocessing text:', {
+        originalLength: text.length,
+        firstLines: text.split('\n').slice(0, 3)
+      })
+      
+      // Шаг 1: Очищаем HTML теги и entities
+      text = text.replace(/<[^>]*>/g, '') // Убираем HTML теги
+      text = text.replace(/&[a-zA-Z]+;/g, '') // Убираем HTML entities
+      
+      // Шаг 2: Обрабатываем заголовки и разделы
+      // Ищем паттерны типа "🏆 ЗАГОЛОВОК:" или "✅ ПОДЗАГОЛОВОК:"
+      text = text.replace(/([🏆✅🔍📋📄🎯⚡🔧🎉🚀]+\s+[А-ЯЁ\s]+:)/g, '\n\n## $1\n')
+      
+      // Шаг 3: Обрабатываем эмодзи-заголовки без двоеточия
+      text = text.replace(/([🏆✅🔍📋📄🎯⚡🔧🎉🚀]+\s+[А-ЯЁ\s]+)(?=\n)/g, '\n\n## $1\n')
+      
+      // Шаг 4: Находим и исправляем нумерованные списки
+      // Ищем паттерны типа "1. текст 2. текст" и разбиваем их на строки
+      text = text.replace(/(\d+\.\s+[^\n]+?)(?=\s+\d+\.)/g, '$1\n')
+      
+      // Шаг 5: Находим и исправляем маркированные списки
+      // Ищем паттерны типа "• текст • текст" и разбиваем их на строки
+      text = text.replace(/([•\-]\s+[^\n]+?)(?=\s+[•\-])/g, '$1\n')
+      
+      // Шаг 6: Добавляем пустые строки ПЕРЕД списками для правильного парсинга
+      text = text.replace(/([^\n])\n(\d+\.\s)/g, '$1\n\n$2')
+      text = text.replace(/([^\n])\n([•\-]\s)/g, '$1\n\n$2')
+      
+      // Шаг 7: Исправляем случаи, когда первый элемент списка остается в предыдущем абзаце
+      text = text.replace(/([^\n])\s+(\d+\.\s)/g, '$1\n\n$2')
+      
+      // Шаг 8: Обрабатываем элементы списка, содержащие заголовки
+      // Ищем паттерны типа "• текст ЗАГОЛОВОК" и разбиваем их
+      text = text.replace(/([•\-]\s+[^\n]*?)([🏆✅🔍📋📄🎯⚡🔧🎉🚀]+\s+[А-ЯЁ\s]+:)/g, '$1\n\n## $2\n')
+      
+      // Шаг 9: Обрабатываем элементы списка с переносами строк
+      // Ищем паттерны типа "• текст\nЗАГОЛОВОК" и исправляем
+      text = text.replace(/([•\-]\s+[^\n]*?)\n([🏆✅🔍📋📄🎯⚡🔧🎉🚀]+\s+[А-ЯЁ\s]+:)/g, '$1\n\n## $2\n')
+      
+      // Шаг 10: Убираем лишние пробелы в начале элементов списка
+      text = text.replace(/^\s*(\d+\.\s+)/gm, '$1')
+      text = text.replace(/^\s*([•\-]\s+)/gm, '$1')
+      
+      // Шаг 11: Убираем лишние пробелы в конце элементов списка
+      text = text.replace(/(\d+\.\s+[^\n]+)\s+$/gm, '$1')
+      text = text.replace(/([•\-]\s+[^\n]+)\s+$/gm, '$1')
+      
+      // Шаг 12: Исправляем случаи, когда элементы списка содержат вложенные списки
+      text = text.replace(/(\d+\.\s+[^\n]*?)([•\-]\s+)/g, '$1\n$2')
+      
+      // Шаг 13: Добавляем пустые строки между основными списками и подсписками
+      text = text.replace(/(\d+\.\s+[^\n]+)\n([•\-]\s+)/g, '$1\n\n$2')
+      
+      // Шаг 14: Обрабатываем специальные случаи с <br> тегами
+      text = text.replace(/<br\s*\/?>/gi, '\n')
+      
+      // Шаг 15: Очищаем множественные переносы строк
+      text = text.replace(/\n{3,}/g, '\n\n')
+      
+      // Шаг 16: Обрабатываем элементы списка, которые содержат слишком много контента
+      // Разбиваем длинные элементы списка на отдельные строки
+      text = text.replace(/([•\-]\s+[^\n]*?)([А-ЯЁ][А-ЯЁ\s]+:)/g, '$1\n\n$2')
+      
+      console.log('🔍 [SEARCH] Preprocessing completed:', {
+        finalLength: text.length,
+        firstLines: text.split('\n').slice(0, 5)
+      })
+      
+      return text
     }
   }
 }
@@ -585,6 +717,127 @@ export default {
 
 .search-panel::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+/* Стили для форматированного контента в результатах поиска */
+/* Переопределяем глобальные стили для блочных тегов */
+.search-result-content h1,
+.search-result-content h2,
+.search-result-content h3,
+.search-result-content h4,
+.search-result-content h5,
+.search-result-content h6 {
+  font-weight: 600;
+  margin: 0.5em 0 0.75em 0;
+  color: #374151;
+}
+
+.search-result-content h2 {
+  font-size: 1.1em;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.25em;
+}
+
+.search-result-content p {
+  margin: 0.75em 0 1em 0;
+  padding: 0.5em 0;
+  line-height: 1.6;
+  text-indent: 1.5em;
+}
+
+/* Первый параграф без отступа */
+.search-result-content p:first-child {
+  text-indent: 0;
+}
+
+/* Параграфы после заголовков без отступа */
+.search-result-content h1 + p,
+.search-result-content h2 + p,
+.search-result-content h3 + p,
+.search-result-content h4 + p,
+.search-result-content h5 + p,
+.search-result-content h6 + p {
+  text-indent: 0;
+}
+
+.search-result-content ul,
+.search-result-content ol {
+  margin: 0.5em 0 1em 0;
+  padding-left: 1.5em;
+}
+
+.search-result-content li {
+  margin: 0.25em 0;
+  line-height: 1.4;
+}
+
+.search-result-content strong {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.search-result-content em {
+  font-style: italic;
+  color: #6b7280;
+}
+
+.search-result-content code {
+  background-color: #f3f4f6;
+  padding: 0.125em 0.25em;
+  border-radius: 0.25em;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 0.875em;
+}
+
+.search-result-content blockquote {
+  border-left: 4px solid #d1d5db;
+  padding-left: 1em;
+  margin: 0.5em 0 1em 0;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.search-result-content a {
+  color: #3b82f6;
+  text-decoration: underline;
+}
+
+.search-result-content a:hover {
+  color: #1d4ed8;
+}
+
+/* Дополнительные отступы для элементов, сброшенных глобальными стилями */
+.search-result-content dl {
+  margin: 0.5em 0 1em 0;
+}
+
+.search-result-content dd {
+  margin: 0.25em 0 0.5em 1.5em;
+}
+
+.search-result-content hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid #e5e7eb;
+}
+
+.search-result-content figure {
+  margin: 0.5em 0 1em 0;
+}
+
+.search-result-content pre {
+  margin: 0.5em 0 1em 0;
+  padding: 1em;
+  background-color: #f3f4f6;
+  border-radius: 0.5em;
+  overflow-x: auto;
+}
+
+.search-result-content pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.875em;
+  color: #374151;
 }
 
 /* Анимация загрузки */

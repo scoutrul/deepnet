@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+	/* Мягкий сброс только для основных элементов, сохраняем отступы для блочных тегов */
+	h1, h2, h3, h4, h5, h6 {
+		margin: 0;
+		font-weight: inherit;
+		font-size: inherit;
+	}
+	
+	/* Убираем сброс margin для блочных тегов в контенте */
+	.search-result-content h1,
+	.search-result-content h2,
+	.search-result-content h3,
+	.search-result-content h4,
+	.search-result-content h5,
+	.search-result-content h6,
+	.search-result-content p,
+	.search-result-content ul,
+	.search-result-content ol,
+	.search-result-content blockquote,
+	.search-result-content dl,
+	.search-result-content dd,
+	.search-result-content hr,
+	.search-result-content figure,
+	.search-result-content pre {
+		margin: revert;
+	}
+	.search-result-content li {
+		margin: 1em 0;
+		line-height: 1.4;
+	}
+}
+
 @layer components {
 	.btn {
 		@apply inline-flex items-center justify-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 motion-safe:transition;

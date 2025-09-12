@@ -354,6 +354,8 @@ export default {
   },
   mounted() {
     this.loadContext()
+    // Если контекст пустой, применяем моковые данные
+    this.applyMockDataIfEmpty()
   },
   methods: {
     // Загрузка существующего контекста
@@ -547,6 +549,25 @@ export default {
     // Удаление критерия
     removeCriterion(index) {
       this.goal.successCriteria.splice(index, 1)
+    },
+    
+    // Применение моковых данных если контекст пустой
+    applyMockDataIfEmpty() {
+      const contextA = contextManager.getContextA()
+      const contextB = contextManager.getContextB()
+      const goal = contextManager.getGoal()
+      
+      // Если контекст пустой, применяем моковые данные
+      if (!contextA || !contextB || !goal) {
+        console.log('🎭 [CONTEXT] Applying mock data to context manager')
+        
+        // Применяем моковые данные к contextManager
+        contextManager.setContextA(this.contextA)
+        contextManager.setContextB(this.contextB)
+        contextManager.setGoal(this.goal)
+        
+        this.showStatus('Моковый контекст применен автоматически', 'info')
+      }
     },
     
     // Показ статуса
