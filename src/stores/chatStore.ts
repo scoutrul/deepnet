@@ -1,6 +1,6 @@
 // Chat Store - Простое управление состоянием чата
 import { stateActions } from './stateManager'
-import type { ChatMessage } from '../types/chat'
+import type { ChatMessage, DiarizedMessage, DiarizedSegment, DiarizedSpeaker, DiarizationState } from '../types/chat'
 
 // Простое состояние без Composition API
 const chatState = {
@@ -35,7 +35,17 @@ const chatState = {
   totalMessages: 0,
   totalWords: 0,
   sessionStartTime: null as number | null,
-  lastActivity: null as number | null
+  lastActivity: null as number | null,
+
+  // Диаризация диалогов
+  diarizedMessages: [] as DiarizedMessage[],
+  speakers: {} as Record<string, DiarizedSpeaker>,
+  activeSegments: {} as Record<string, DiarizedSegment>,
+  diarizationState: {
+    isActive: false,
+    isConnecting: false,
+    error: null
+  } as DiarizationState
 }
 
 // Действия чата
@@ -239,6 +249,114 @@ export const chatActions = {
     console.log('💬 [CHAT] Chat store initialized')
   },
 
+  // ==================== ДИАРИЗАЦИЯ ДИАЛОГОВ ====================
+
+  // Очистка диалога
+  clearDialog() {
+    console.log('💬 [CHAT] Clearing dialog...')
+    
+    // Очищаем диаризованные сообщения
+    chatState.diarizedMessages = []
+    chatState.speakers = {}
+    chatState.activeSegments = {}
+    
+    // Сбрасываем состояние диаризации
+    chatState.diarizationState = {
+      isActive: false,
+      isConnecting: false,
+      error: null,
+      speakers: {},
+      activeSegments: {}
+    }
+    
+    console.log('💬 [CHAT] Dialog cleared')
+  },
+
+  // Добавление диаризованного сегмента
+  appendDiarizedSegment(segment: DiarizedSegment) {
+    console.log('💬 [CHAT] Appending diarized segment:', segment.speakerName, segment.text)
+    
+    // Обновляем активные сегменты
+    if (!segment.isFinal) {
+      chatState.activeSegments[segment.speakerId] = segment
+    } else {
+      delete chatState.activeSegments[segment.speakerId]
+    }
+
+    // 🔧 ИСПРАВЛЕНИЕ: Создаем сообщения для ВСЕХ сегментов, не только финальных
+    this.createOrUpdateDiarizedMessage(segment)
+
+    stateActions.updateTimestamp()
+  },
+
+  // 🔧 ИСПРАВЛЕНИЕ: Создание или обновление диаризованного сообщения (для всех сегментов)
+  createOrUpdateDiarizedMessage(segment: DiarizedSegment) {
+    console.log('💬 [CHAT] 🔧 Creating/updating message for segment:', segment.text, 'isFinal:', segment.isFinal)
+    
+    // Ищем активное сообщение от того же спикера
+    const existingMessageIndex = chatState.diarizedMessages.findIndex(
+      msg => msg.speakerId === segment.speakerId && msg.isActive
+    )
+    
+    // Проверяем таймаут между сообщениями (3 секунды)
+    const MESSAGE_TIMEOUT = 3000 // 3 секунды
+    const lastMessage = chatState.diarizedMessages[chatState.diarizedMessages.length - 1]
+    const shouldCreateNewMessage = !lastMessage || 
+      (segment.timestamp - lastMessage.timestamp > MESSAGE_TIMEOUT) ||
+      (lastMessage.speakerId !== segment.speakerId)
+
+    if (existingMessageIndex >= 0 && !shouldCreateNewMessage) {
+      // Обновляем существующее активное сообщение (в пределах таймаута)
+      const existingMessage = chatState.diarizedMessages[existingMessageIndex]
+      console.log('💬 [CHAT] 🔧 Updating existing message:', existingMessage.content, '→', segment.text)
+      
+      existingMessage.content = segment.text  // DeepGram дает полный обновленный текст
+      existingMessage.segments.push(segment)
+      existingMessage.timestamp = segment.timestamp
+      existingMessage.isActive = !segment.isFinal  // Активно пока не финальное
+    } else {
+      // Финализируем предыдущие активные сообщения при создании нового
+      if (shouldCreateNewMessage) {
+        chatState.diarizedMessages.forEach(msg => {
+          if (msg.isActive) {
+            console.log('💬 [CHAT] 🔧 Finalizing previous message:', msg.content)
+            msg.isActive = false
+          }
+        })
+      }
+      
+      // Создаем новое сообщение
+      const speaker = chatState.speakers[segment.speakerId]
+      const message: DiarizedMessage = {
+        id: `diarized_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        speakerId: segment.speakerId,
+        speakerName: segment.speakerName,
+        speakerColor: speaker?.color || '#6B7280',
+        content: segment.text,
+        timestamp: segment.timestamp,
+        segments: [segment],
+        isActive: !segment.isFinal  // Активно пока не финальное
+      }
+      
+      console.log('💬 [CHAT] 🔧 Created new message:', message.content, 'isActive:', message.isActive)
+      chatState.diarizedMessages.push(message)
+    }
+
+    console.log('💬 [CHAT] 🔧 Total diarized messages:', chatState.diarizedMessages.length)
+  },
+
+  // Обновление состояния диаризации
+  updateDiarizationState(state: Partial<DiarizationState>) {
+    chatState.diarizationState = { ...chatState.diarizationState, ...state }
+    console.log('💬 [CHAT] Diarization state updated:', state)
+  },
+
+  // Добавление спикера
+  addSpeaker(speaker: DiarizedSpeaker) {
+    chatState.speakers[speaker.id] = speaker
+    console.log('💬 [CHAT] Speaker added:', speaker.displayName)
+  },
+
   // Очистка состояния
   cleanup() {
     console.log('💬 [CHAT] Cleaning up chat store...')
@@ -263,6 +381,18 @@ export const chatActions = {
     chatState.totalWords = 0
     chatState.sessionStartTime = null
     chatState.lastActivity = null
+
+    // Очищаем диаризацию
+    chatState.diarizedMessages = []
+    chatState.speakers = {}
+    chatState.activeSegments = {}
+    chatState.diarizationState = {
+      isActive: false,
+      isConnecting: false,
+      error: null,
+      speakers: {},
+      activeSegments: {}
+    }
     
     console.log('💬 [CHAT] Chat store cleaned up')
   }
@@ -291,7 +421,19 @@ export const chatGetters = {
     return 0
   },
   userMessages: () => chatState.messages.filter((m: ChatMessage) => m.role === 'user'),
-  assistantMessages: () => chatState.messages.filter((m: ChatMessage) => m.role === 'assistant')
+  assistantMessages: () => chatState.messages.filter((m: ChatMessage) => m.role === 'assistant'),
+
+  // Диаризация геттеры
+  diarizedMessages: () => chatState.diarizedMessages,
+  speakers: () => chatState.speakers,
+  activeSegments: () => chatState.activeSegments,
+  diarizationState: () => chatState.diarizationState,
+  isDiarizationActive: () => chatState.diarizationState.isActive,
+  isDiarizationConnecting: () => chatState.diarizationState.isConnecting,
+  diarizationError: () => chatState.diarizationState.error,
+  hasDiarizedMessages: () => chatState.diarizedMessages.length > 0,
+  activeSpeakers: () => Object.keys(chatState.activeSegments),
+  speakerCount: () => Object.keys(chatState.speakers).length
 }
 
 // Хук для использования в компонентах

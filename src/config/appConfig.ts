@@ -2,14 +2,24 @@
 export const appConfig = {
   // DeepGram Configuration
   deepgram: {
-    apiKey: import.meta.env.VITE_DEEPGRAM_API_KEY || localStorage.getItem('deepgram_api_key'),
+    apiKey: (() => {
+      const envKey = import.meta.env.VITE_DEEPGRAM_API_KEY
+      const localKey = localStorage.getItem('deepgram_api_key')
+      const finalKey = envKey || localKey
+      console.log('🔑 [CONFIG] DeepGram API Key sources:')
+      console.log('🔑 [CONFIG] - VITE_DEEPGRAM_API_KEY:', envKey)
+      console.log('🔑 [CONFIG] - localStorage:', localKey)
+      console.log('🔑 [CONFIG] - Final key:', finalKey)
+      console.log('🔑 [CONFIG] - Key length:', finalKey?.length)
+      return finalKey
+    })(),
     model: 'nova-3',
     language: 'ru-RU',
     streaming: true,
     interimResults: true,
     punctuate: true,
     profanity_filter: false,
-    diarize: false,
+    diarize: true, // Включаем диаризацию
     multichannel: false,
     alternatives: 1,
     numerals: true,
@@ -76,6 +86,31 @@ export const appConfig = {
     maxSearchResults: 20,
     animationDuration: 300,
     debounceDelay: 500
+  },
+
+  // Features Configuration
+  features: {
+    diarization: true,
+    voiceRecognition: true,
+    contextHints: true,
+    search: true
+  },
+
+  // Diarization Settings
+  diarization: {
+    speakerColors: [
+      '#3B82F6', // blue-500
+      '#EF4444', // red-500
+      '#10B981', // emerald-500
+      '#F59E0B', // amber-500
+      '#8B5CF6', // violet-500
+      '#EC4899', // pink-500
+      '#06B6D4', // cyan-500
+      '#84CC16'  // lime-500
+    ],
+    mergeTimeout: 2000, // 2 секунды для объединения сегментов
+    maxSpeakers: 8,
+    segmentMinLength: 3
   }
 }
 

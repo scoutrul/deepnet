@@ -4,6 +4,7 @@ import { useVoiceStore } from '../stores/voiceStore'
 import { useContextStore } from '../stores/contextStore'
 import { useChatStore } from '../stores/chatStore'
 import { useUiStore } from '../stores/uiStore'
+import { diarizationService } from '../services/voice/diarizationService'
 
 // Адаптер для связи UI и Business слоев
 export class UIBusinessAdapter implements UIBusinessInterface {
@@ -237,12 +238,92 @@ export class UIBusinessAdapter implements UIBusinessInterface {
       return () => {}
     }
   }
+
+  // ==================== ДИАРИЗАЦИЯ ДИАЛОГОВ ====================
+
+  // Запуск диаризации
+  async startDiarization(): Promise<void> {
+    try {
+      console.log('🎭 [ADAPTER] Starting diarization...')
+      
+      // Подписываемся на события диаризации
+      diarizationService.on('onSegment', (segment) => {
+        this.getChatStore().actions.appendDiarizedSegment(segment)
+      })
+      
+      diarizationService.on('onSpeakerChange', (speaker) => {
+        this.getChatStore().actions.addSpeaker(speaker)
+      })
+      
+      diarizationService.on('onStateChange', (state) => {
+        this.getChatStore().actions.updateDiarizationState(state)
+      })
+      
+      diarizationService.on('onError', (error) => {
+        console.error('🎭 [ADAPTER] Diarization error:', error)
+        this.getChatStore().actions.updateDiarizationState({ 
+          isActive: false, 
+          isConnecting: false, 
+          error: error.message 
+        })
+      })
+      
+      // Запускаем диаризацию
+      await diarizationService.start()
+      
+      console.log('🎭 [ADAPTER] Diarization started successfully')
+    } catch (error) {
+      console.error('🎭 [ADAPTER] Error starting diarization:', error)
+      this.getChatStore().actions.updateDiarizationState({ 
+        isActive: false, 
+        isConnecting: false, 
+        error: error instanceof Error ? error.message : 'Unknown error' 
+      })
+    }
+  }
+
+  // Остановка диаризации
+  async stopDiarization(): Promise<void> {
+    try {
+      console.log('🎭 [ADAPTER] Stopping diarization...')
+      
+      await diarizationService.stop()
+      
+      // Отписываемся от событий
+      diarizationService.off('onSegment')
+      diarizationService.off('onSpeakerChange')
+      diarizationService.off('onStateChange')
+      diarizationService.off('onError')
+      
+      console.log('🎭 [ADAPTER] Diarization stopped successfully')
+    } catch (error) {
+      console.error('🎭 [ADAPTER] Error stopping diarization:', error)
+    }
+  }
+
+  // Отправка аудио данных в диаризацию
+  // 🎯 ИСПРАВЛЕНИЕ: Принимаем Blob согласно официальной документации DeepGram
+  async sendAudioToDiarization(audioBlob: Blob): Promise<void> {
+    try {
+      await diarizationService.sendAudio(audioBlob)
+    } catch (error) {
+      console.error('🎭 [ADAPTER] Error sending audio to diarization:', error)
+    }
+  }
+
+  // Получение состояния диаризации
+  getDiarizationState() {
+    return this.getChatStore().getters.diarizationState()
+  }
   
   // ==================== ОЧИСТКА РЕСУРСОВ ====================
   
   cleanup(): void {
     try {
       console.log('🔗 [ADAPTER] Cleaning up adapter...')
+      
+      // Останавливаем диаризацию
+      this.stopDiarization()
       
       // Очищаем stores
       this.getVoiceStore().actions.cleanup()
