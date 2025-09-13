@@ -7,14 +7,6 @@
         <p class="text-gray-600">Система распознавания голоса с контекстными подсказками</p>
       </div>
 
-      <!-- Voice Panel -->
-      <div class="mb-6">
-        <VoicePanel 
-          ref="voicePanel" 
-          @tag-selected="onTagSelected"
-          @add-selected-to-input="onAddSelectedToInput" 
-        />
-      </div>
 
       <!-- Main Content - Single Column -->
       <div class="space-y-6">
@@ -67,21 +59,6 @@
             </div>
           </div>
 
-          <!-- Voice Recorder -->
-          <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-200">
-              <h2 class="text-lg font-semibold text-gray-800">Голосовое управление</h2>
-            </div>
-            <div class="px-6 py-4">
-              <VoiceRecorder 
-                ref="voiceRecorder"
-                @transcription="onTranscription"
-                @phrase-complete="onPhraseComplete"
-                @error="onVoiceError"
-                @state-change="onVoiceStateChange"
-              />
-            </div>
-          </div>
         </div>
 
         <!-- Context Management -->
@@ -142,8 +119,6 @@
 </template>
 
 <script>
-import VoicePanel from './voice/VoicePanel.vue'
-import VoiceRecorder from './voice/VoiceRecorder.vue'
 import Message from './chat/Message.vue'
 import ChatInput from './chat/ChatInput.vue'
 import ContextPanel from './context/ContextPanel.vue'
@@ -155,8 +130,6 @@ import { uiBusinessAdapter } from '../adapters'
 export default {
   name: 'MainApp',
   components: {
-    VoicePanel,
-    VoiceRecorder,
     Message,
     ChatInput,
     ContextPanel,
@@ -250,57 +223,6 @@ export default {
       localStorage.setItem('deepnet_messages', JSON.stringify(this.messages))
     },
 
-    // Voice event handlers
-    onTranscription(data) {
-      console.log('🎤 [APP] Transcription received:', data)
-      
-      // Добавляем транскрипцию как сообщение пользователя
-      if (data.isFinal && data.text.trim()) {
-        this.addMessage({
-          id: Date.now().toString(),
-          text: data.text,
-          content: data.text,
-          role: 'user',
-          isUser: true,
-          timestamp: data.timestamp,
-          confidence: data.confidence
-        })
-      }
-    },
-
-    onPhraseComplete(data) {
-      console.log('🎤 [APP] Phrase complete:', data)
-      this.phraseCount++
-      
-      // Добавляем завершенную фразу как сообщение
-      if (data.phrase.trim()) {
-        this.addMessage({
-          id: Date.now().toString(),
-          text: data.phrase,
-          content: data.phrase,
-          role: 'user',
-          isUser: true,
-          timestamp: Date.now(),
-          confidence: data.confidence
-        })
-      }
-    },
-
-    onVoiceError(error) {
-      console.error('🎤 [APP] Voice error:', error)
-      this.connectionStatus = 'Ошибка голоса'
-    },
-
-    onVoiceStateChange(state) {
-      console.log('🎤 [APP] Voice state changed:', state)
-      
-      if (state.status === 'recording') {
-        this.connectionStatus = 'Запись...'
-      } else if (state.status === 'stopped') {
-        this.connectionStatus = this.isDeepGramMode ? 'DeepGram готов' : 'Web Speech API готов'
-      }
-    },
-
     // Chat event handlers
     onSubmit(text) {
       if (!text.trim()) return
@@ -322,15 +244,6 @@ export default {
       this.draft = draft
     },
 
-    onTagSelected(tag) {
-      console.log('🏷️ [APP] Tag selected:', tag)
-      // Обрабатываем выбранный тег
-    },
-
-    onAddSelectedToInput(text) {
-      console.log('➕ [APP] Add to input:', text)
-      // Добавляем текст в поле ввода
-    },
 
     onRetry(message) {
       console.log('🔄 [APP] Retry message:', message)
@@ -432,9 +345,6 @@ export default {
       this.adapter.cleanup()
       
       // Очищаем ресурсы компонентов
-      if (this.$refs.voiceRecorder) {
-        this.$refs.voiceRecorder.cleanup()
-      }
       
       console.log('🚀 [APP] App cleaned up')
     }
