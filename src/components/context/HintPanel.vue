@@ -195,7 +195,7 @@
 </template>
 
 <script>
-import { HintGenerator, contextManager, dialogProcessor, hintGenerator } from '../../services/context'
+import { contextManager, dialogProcessor } from '../../services/context'
 
 export default {
   name: 'HintPanel',
@@ -206,7 +206,7 @@ export default {
       selectedCategory: '',
       selectedPriority: '',
       selectedStatus: '',
-      hintGenerator: null
+      // hintGenerator заменен на contextManager
     }
   },
   computed: {
@@ -255,23 +255,21 @@ export default {
   methods: {
     // Инициализация генератора подсказок
     initializeHintGenerator() {
-      // Используем глобальный экземпляр HintGenerator
-      this.hintGenerator = hintGenerator
+      // Используем contextManager вместо hintGenerator
+      console.log('🎯 [HINT] Hint generator initialized via contextManager')
     },
     
     // Загрузка подсказок
     loadHints() {
-      if (this.hintGenerator) {
-        this.hints = this.hintGenerator.getHints()
-        this.categories = this.hintGenerator.getCategories()
-      }
+      // Получаем подсказки через contextManager
+      this.hints = contextManager.getHints() || []
+      this.categories = contextManager.getCategories() || []
     },
     
     // Загрузка категорий
     loadCategories() {
-      if (this.hintGenerator) {
-        this.categories = this.hintGenerator.getCategories()
-      }
+      // Получаем категории через contextManager
+      this.categories = contextManager.getCategories() || []
     },
     
     // Фильтрация подсказок
@@ -285,8 +283,8 @@ export default {
         const context = contextManager.getFullContext()
         const dialog = dialogProcessor.getDialogEntries()
         
-        if (context && dialog.length > 0 && this.hintGenerator) {
-          const newHints = await this.hintGenerator.generateHints(dialog, context)
+        if (context && dialog.length > 0) {
+          const newHints = await contextManager.generateHints(dialog, context)
           this.hints = newHints
         }
       } catch (error) {
@@ -296,18 +294,16 @@ export default {
     
     // Переключение статуса прочтения
     toggleRead(hint) {
-      if (this.hintGenerator) {
-        this.hintGenerator.markAsRead(hint.id)
-        hint.isRead = !hint.isRead
-      }
+      // Отмечаем подсказку как прочитанную через contextManager
+      contextManager.markHintAsRead(hint.id)
+      hint.isRead = !hint.isRead
     },
     
     // Отклонение подсказки
     dismissHint(hint) {
-      if (this.hintGenerator) {
-        this.hintGenerator.dismissHint(hint.id)
-        hint.isDismissed = !hint.isDismissed
-      }
+      // Отклоняем подсказку через contextManager
+      contextManager.dismissHint(hint.id)
+      hint.isDismissed = !hint.isDismissed
     },
     
     // Отметить все как прочитанные

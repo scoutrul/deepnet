@@ -109,7 +109,7 @@ export interface HintCategory {
 export interface SearchQuery {
   id: string
   text: string
-  context: FullContext
+  context?: FullContext
   filters: SearchFilters
   timestamp: number
 }

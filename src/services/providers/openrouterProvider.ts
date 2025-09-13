@@ -1,4 +1,4 @@
-import { fetchCompletion } from '@/services/aiClient'
+import { fetchCompletion } from '../chat/aiClient'
 import type { ChatProvider, ProviderRequest } from './types'
 
 class OpenRouterProvider implements ChatProvider {

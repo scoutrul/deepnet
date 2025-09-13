@@ -6,8 +6,44 @@ import type {
   DeepGramError, 
   DeepGramStreamingOptions,
   DeepGramConnection 
-} from '../types/deepgram'
-import type { VoiceRecognitionService, VoiceError, VoiceState, TranscriptionResult } from './voiceService'
+} from '../../types/deepgram'
+// Voice Service Types
+export interface VoiceRecognitionService {
+  start(): Promise<void>
+  stop(): void
+  pause(): void
+  resume(): void
+  onTranscription(callback: (data: TranscriptionResult) => void): void
+  onError(callback: (error: VoiceError) => void): void
+  onStateChange(callback: (state: VoiceState) => void): void
+  onPhraseComplete(callback: (data: { phrase: string, confidence: number }) => void): void
+  setLanguage(language: string): void
+  getCurrentState(): VoiceState
+  cleanup(): void
+}
+
+export interface VoiceError {
+  type: 'permission' | 'browser' | 'network' | 'audio' | 'no-speech' | 'security' | 'unknown'
+  message: string
+  details?: any
+  code?: string
+}
+
+export interface VoiceState {
+  status: 'idle' | 'recording' | 'paused' | 'stopped' | 'error'
+  isListening: boolean
+  confidence: number
+  language: string
+  phraseCount: number
+  totalDuration: number
+}
+
+export interface TranscriptionResult {
+  text: string
+  isFinal: boolean
+  confidence: number
+  timestamp: number
+}
 
 class DeepGramVoiceService implements VoiceRecognitionService {
   private deepgram: any
@@ -45,18 +81,24 @@ class DeepGramVoiceService implements VoiceRecognitionService {
       
       // Проверяем API ключ
       if (!this.config.apiKey) {
-        throw new Error('API ключ DeepGram не предоставлен')
+        console.warn('🎤 [DEEPGRAM] API ключ не предоставлен, работаем в режиме без DeepGram')
+        this.deepgram = null
+        return
       }
       
       if (!this.config.apiKey.startsWith('sk-')) {
-        throw new Error('Неверный формат API ключа DeepGram. Ключ должен начинаться с "sk-"')
+        console.warn('🎤 [DEEPGRAM] Неверный формат API ключа, работаем в режиме без DeepGram')
+        this.deepgram = null
+        return
       }
       
       this.deepgram = createClient(this.config.apiKey)
       
       // Проверяем, что клиент создался
       if (!this.deepgram) {
-        throw new Error('Не удалось создать DeepGram клиент')
+        console.warn('🎤 [DEEPGRAM] Не удалось создать DeepGram клиент, работаем в режиме без DeepGram')
+        this.deepgram = null
+        return
       }
       
       console.log('🎤 [DEEPGRAM] DeepGram client initialized successfully')
@@ -68,8 +110,7 @@ class DeepGramVoiceService implements VoiceRecognitionService {
         message: 'Не удалось инициализировать DeepGram клиент',
         details: error
       })
-      // Выбрасываем ошибку, чтобы конструктор знал об ошибке
-      throw error
+      // Не выбрасываем ошибку, работаем в режиме без DeepGram
     }
   }
 
@@ -83,8 +124,16 @@ class DeepGramVoiceService implements VoiceRecognitionService {
 
     // Проверяем, что DeepGram клиент инициализирован
     if (!this.deepgram) {
-      console.error('🎤 [DEEPGRAM] DeepGram client not initialized')
-      throw new Error('DeepGram клиент не инициализирован')
+      console.warn('🎤 [DEEPGRAM] DeepGram client not initialized, voice recognition unavailable')
+      this.updateState({
+        status: 'error',
+        isListening: false,
+        confidence: 0,
+        language: this.config.language,
+        phraseCount: 0,
+        totalDuration: 0
+      })
+      return
     }
 
     try {
@@ -203,8 +252,8 @@ class DeepGramVoiceService implements VoiceRecognitionService {
 
     // Проверяем, что DeepGram клиент инициализирован
     if (!this.deepgram) {
-      console.error('🎤 [DEEPGRAM] DeepGram client not initialized')
-      throw new Error('DeepGram клиент не инициализирован')
+      console.warn('🎤 [DEEPGRAM] DeepGram client not initialized, connection unavailable')
+      return
     }
 
     const options: DeepGramStreamingOptions = {
@@ -397,7 +446,7 @@ class DeepGramVoiceService implements VoiceRecognitionService {
         this.handleError({
           type: 'processing',
           message: 'Ошибка отправки аудио данных',
-          details: error
+        details: error
         })
       }
     }

@@ -2,9 +2,9 @@
 import { OpenRouterProvider } from '@/services/providers/openrouterProvider'
 import { AnthropicProvider } from '@/services/providers/anthropicProvider'
 import type { ChatProvider } from '@/services/providers/types'
-import { parseToUiModel } from '@/services/responseParser'
+import { parseToUiModel } from './responseParser'
 import type { ParsedResponse } from '@/types/ai'
-import { appConfig } from '../config/appConfig'
+import { appConfig } from '../../config/appConfig'
 
 const MODEL = appConfig.llm.model || 'gpt-4o'
 const TIMEOUT_MS = appConfig.request.timeout || 5000

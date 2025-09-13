@@ -144,13 +144,13 @@
 <script>
 import VoicePanel from './voice/VoicePanel.vue'
 import VoiceRecorder from './voice/VoiceRecorder.vue'
-import Message from './Message.vue'
-import ChatInput from './ChatInput.vue'
+import Message from './chat/Message.vue'
+import ChatInput from './chat/ChatInput.vue'
 import ContextPanel from './context/ContextPanel.vue'
 import HintPanel from './context/HintPanel.vue'
 import SearchPanel from './context/SearchPanel.vue'
-import { contextManager, dialogProcessor } from '../services/context'
-import { VoiceServiceFactory } from '../services/voiceServiceFactory'
+import { uiBusinessAdapter } from '../adapters'
+// Используем адаптер для связи с сервисами
 
 export default {
   name: 'MainApp',
@@ -165,6 +165,8 @@ export default {
   },
   data() {
     return {
+      // Используем адаптер для получения данных
+      adapter: uiBusinessAdapter,
       messages: [],
       queuedTerms: [],
       draft: '',
@@ -188,8 +190,8 @@ export default {
       }
     }
   },
-  mounted() {
-    this.initializeApp()
+  async mounted() {
+    await this.initializeApp()
   },
   beforeDestroy() {
     this.cleanup()
@@ -199,11 +201,15 @@ export default {
       console.log('🚀 [APP] Initializing DeepNet Context System...')
       
       try {
-        // Проверяем доступность сервисов
-        this.isDeepGramMode = VoiceServiceFactory.isDeepGramAvailable()
-        this.connectionStatus = this.isDeepGramMode ? 'DeepGram доступен' : 'Web Speech API'
+        // Инициализируем сервисы через адаптер
+        await this.adapter.initializeServices()
         
-        // Инициализируем контекст
+        // Проверяем доступность DeepGram
+        const deepgramApiKey = import.meta.env.VITE_DEEPGRAM_API_KEY || localStorage.getItem('deepgram_api_key')
+        this.isDeepGramMode = !!deepgramApiKey
+        this.connectionStatus = this.isDeepGramMode ? 'DeepGram доступен' : 'DeepGram недоступен'
+        
+        // Инициализируем контекст через адаптер
         await this.initializeContext()
         
         // Загружаем существующие сообщения
@@ -217,8 +223,8 @@ export default {
     },
 
     async initializeContext() {
-      // Проверяем, есть ли сохраненный контекст
-      const context = contextManager.getFullContext()
+      // Получаем контекст через адаптер
+      const context = this.adapter.getData('context.context')
       if (!context) {
         console.log('🎯 [APP] No context found, user needs to set up context')
         return
@@ -379,14 +385,14 @@ export default {
       this.loading = true
       
       try {
-        // Импортируем chatService
-        const { chatService } = await import('../services/chatService')
-        
-        // Отправляем запрос к LLM
-        const response = await chatService.ask(text, {
-          detailLevel: 'extended',
-          usePreviousContext: true,
-          previousAssistantText: this.messages.filter(m => !m.isUser).slice(-1)[0]?.text || ''
+        // Отправляем сообщение через адаптер
+        const response = await this.adapter.executeAction('chat.sendMessage', {
+          text,
+          options: {
+            detailLevel: 'extended',
+            usePreviousContext: true,
+            previousAssistantText: this.messages.filter(m => !m.isUser).slice(-1)[0]?.text || ''
+          }
         })
         
         console.log('💬 [APP] LLM response:', response)
@@ -422,7 +428,10 @@ export default {
     cleanup() {
       console.log('🚀 [APP] Cleaning up app...')
       
-      // Очищаем ресурсы
+      // Очищаем ресурсы через адаптер
+      this.adapter.cleanup()
+      
+      // Очищаем ресурсы компонентов
       if (this.$refs.voiceRecorder) {
         this.$refs.voiceRecorder.cleanup()
       }

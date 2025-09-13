@@ -7,266 +7,26 @@
 
     <!-- Контекст стороны A -->
     <div class="mb-8">
-      <h3 class="text-lg font-semibold text-gray-700 mb-4 flex items-center">
-        <span class="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">A</span>
-        Сторона A (Вы)
-      </h3>
-      
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Имя</label>
-          <input
-            v-model="contextA.name"
-            type="text"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Ваше имя"
-          />
-        </div>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Роль</label>
-          <input
-            v-model="contextA.role"
-            type="text"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Ваша роль/позиция"
-          />
-        </div>
-        
-        <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Фон и опыт</label>
-          <textarea
-            v-model="contextA.background"
-            rows="3"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Опишите ваш опыт и квалификацию"
-          />
-        </div>
-        
-        <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Навыки</label>
-          <div class="flex flex-wrap gap-2">
-            <span
-              v-for="(skill, index) in contextA.skills"
-              :key="index"
-              class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
-            >
-              {{ skill }}
-              <button
-                @click="removeSkill(index)"
-                class="ml-2 text-blue-600 hover:text-blue-800"
-              >
-                ×
-              </button>
-            </span>
-            <input
-              v-model="newSkill"
-              @keyup.enter="addSkill"
-              type="text"
-              class="flex-1 min-w-32 px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Добавить навык"
-            />
-          </div>
-        </div>
-        
-        <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Цели</label>
-          <div class="flex flex-wrap gap-2">
-            <span
-              v-for="(goal, index) in contextA.goals"
-              :key="index"
-              class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-green-100 text-green-800"
-            >
-              {{ goal }}
-              <button
-                @click="removeGoal(index)"
-                class="ml-2 text-green-600 hover:text-green-800"
-              >
-                ×
-              </button>
-            </span>
-            <input
-              v-model="newGoal"
-              @keyup.enter="addGoal"
-              type="text"
-              class="flex-1 min-w-32 px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Добавить цель"
-            />
-          </div>
-        </div>
-      </div>
+      <ContextA
+        :context="contextA"
+        @update:context="updateContextA"
+      />
     </div>
 
     <!-- Контекст стороны B -->
     <div class="mb-8">
-      <h3 class="text-lg font-semibold text-gray-700 mb-4 flex items-center">
-        <span class="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">B</span>
-        Сторона B (Собеседник)
-      </h3>
-      
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Имя</label>
-          <input
-            v-model="contextB.name"
-            type="text"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            placeholder="Имя собеседника"
-          />
-        </div>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Роль</label>
-          <input
-            v-model="contextB.role"
-            type="text"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            placeholder="Роль собеседника"
-          />
-        </div>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Компания</label>
-          <input
-            v-model="contextB.company"
-            type="text"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            placeholder="Название компании"
-          />
-        </div>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Позиция</label>
-          <input
-            v-model="contextB.position"
-            type="text"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            placeholder="Позиция собеседника"
-          />
-        </div>
-        
-        <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Требования к позиции</label>
-          <div class="flex flex-wrap gap-2">
-            <span
-              v-for="(requirement, index) in contextB.requirements"
-              :key="index"
-              class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-orange-100 text-orange-800"
-            >
-              {{ requirement }}
-              <button
-                @click="removeRequirement(index)"
-                class="ml-2 text-orange-600 hover:text-orange-800"
-              >
-                ×
-              </button>
-            </span>
-            <input
-              v-model="newRequirement"
-              @keyup.enter="addRequirement"
-              type="text"
-              class="flex-1 min-w-32 px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="Добавить требование"
-            />
-          </div>
-        </div>
-        
-        <div class="md:col-span-2">
-          <label class="block text-sm font-medium text-gray-700 mb-2">Ожидания</label>
-          <div class="flex flex-wrap gap-2">
-            <span
-              v-for="(expectation, index) in contextB.expectations"
-              :key="index"
-              class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800"
-            >
-              {{ expectation }}
-              <button
-                @click="removeExpectation(index)"
-                class="ml-2 text-purple-600 hover:text-purple-800"
-              >
-                ×
-              </button>
-            </span>
-            <input
-              v-model="newExpectation"
-              @keyup.enter="addExpectation"
-              type="text"
-              class="flex-1 min-w-32 px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-              placeholder="Добавить ожидание"
-            />
-          </div>
-        </div>
-      </div>
+      <ContextB
+        :context="contextB"
+        @update:context="updateContextB"
+      />
     </div>
 
-    <!-- Цель коммуникации -->
+    <!-- Настройки цели -->
     <div class="mb-8">
-      <h3 class="text-lg font-semibold text-gray-700 mb-4 flex items-center">
-        <span class="w-8 h-8 bg-purple-500 text-white rounded-full flex items-center justify-center text-sm font-bold mr-3">🎯</span>
-        Цель коммуникации
-      </h3>
-      
-      <div class="space-y-4">
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Описание цели</label>
-          <textarea
-            v-model="goal.description"
-            rows="3"
-            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-            placeholder="Опишите цель вашей коммуникации"
-          />
-        </div>
-        
-        <div>
-          <label class="block text-sm font-medium text-gray-700 mb-2">Критерии успеха</label>
-          <div class="flex flex-wrap gap-2">
-            <span
-              v-for="(criterion, index) in goal.successCriteria"
-              :key="index"
-              class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-800"
-            >
-              {{ criterion }}
-              <button
-                @click="removeCriterion(index)"
-                class="ml-2 text-purple-600 hover:text-purple-800"
-              >
-                ×
-              </button>
-            </span>
-            <input
-              v-model="newCriterion"
-              @keyup.enter="addCriterion"
-              type="text"
-              class="flex-1 min-w-32 px-3 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Добавить критерий"
-            />
-          </div>
-        </div>
-        
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Приоритет</label>
-            <select
-              v-model="goal.priority"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="low">Низкий</option>
-              <option value="medium">Средний</option>
-              <option value="high">Высокий</option>
-              <option value="critical">Критический</option>
-            </select>
-          </div>
-          
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Дедлайн (опционально)</label>
-            <input
-              v-model="goal.deadline"
-              type="datetime-local"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-          </div>
-        </div>
-      </div>
+      <GoalSettings
+        :goal="goal"
+        @update:goal="updateGoal"
+      />
     </div>
 
     <!-- Кнопки действий -->
@@ -309,10 +69,18 @@
 </template>
 
 <script>
+import ContextA from './ContextA.vue'
+import ContextB from './ContextB.vue'
+import GoalSettings from './GoalSettings.vue'
 import { contextManager } from '../../services/context'
 
 export default {
   name: 'ContextPanel',
+  components: {
+    ContextA,
+    ContextB,
+    GoalSettings
+  },
   data() {
     return {
       contextA: {
@@ -334,13 +102,11 @@ export default {
         description: 'Успешно пройти техническое собеседование на позицию Senior Frontend Developer',
         successCriteria: ['Продемонстрировать глубокие знания Vue.js', 'Показать опыт с TypeScript', 'Объяснить архитектурные решения', 'Показать лидерские качества'],
         priority: 'high',
-        deadline: null
+        deadline: null,
+        communicationType: 'interview',
+        duration: 60,
+        notes: ''
       },
-      newSkill: '',
-      newGoal: '',
-      newRequirement: '',
-      newExpectation: '',
-      newCriterion: '',
       contextStatus: '',
       contextStatusClass: ''
     }
@@ -354,114 +120,109 @@ export default {
   },
   mounted() {
     this.loadContext()
-    // Если контекст пустой, применяем моковые данные
-    this.applyMockDataIfEmpty()
   },
   methods: {
-    // Загрузка существующего контекста
-    loadContext() {
-      const contextA = contextManager.getContextA()
-      const contextB = contextManager.getContextB()
-      const goal = contextManager.getGoal()
-      
-      if (contextA) {
-        this.contextA = {
-          name: contextA.name,
-          role: contextA.role,
-          background: contextA.background,
-          skills: [...contextA.skills],
-          goals: [...contextA.goals]
-        }
-      }
-      
-      if (contextB) {
-        this.contextB = {
-          name: contextB.name,
-          role: contextB.role,
-          company: contextB.company,
-          position: contextB.position,
-          requirements: [...contextB.requirements],
-          expectations: [...contextB.expectations]
-        }
-      }
-      
-      if (goal) {
-        this.goal = {
-          description: goal.description,
-          successCriteria: [...goal.successCriteria],
-          priority: goal.priority,
-          deadline: goal.deadline ? new Date(goal.deadline).toISOString().slice(0, 16) : null
-        }
-      }
+    updateContextA(newContext) {
+      this.contextA = { ...newContext }
     },
     
-    // Сохранение контекста
-    saveContext() {
+    updateContextB(newContext) {
+      this.contextB = { ...newContext }
+    },
+    
+    updateGoal(newGoal) {
+      this.goal = { ...newGoal }
+    },
+    
+    async loadContext() {
       try {
-        contextManager.setContextA(this.contextA)
-        contextManager.setContextB(this.contextB)
-        contextManager.setGoal({
-          ...this.goal,
-          deadline: this.goal.deadline ? new Date(this.goal.deadline).getTime() : undefined
-        })
-        
-        this.showStatus('Контекст успешно сохранен', 'success')
+        const savedContext = await contextManager.getContext()
+        if (savedContext) {
+          this.contextA = { ...this.contextA, ...savedContext.contextA }
+          this.contextB = { ...this.contextB, ...savedContext.contextB }
+          this.goal = { ...this.goal, ...savedContext.goal }
+        }
       } catch (error) {
-        this.showStatus('Ошибка при сохранении контекста', 'error')
+        console.error('Error loading context:', error)
+        this.showStatus('Ошибка загрузки контекста', 'error')
+      }
+    },
+    
+    async saveContext() {
+      if (!this.isContextValid) {
+        this.showStatus('Заполните все обязательные поля', 'error')
+        return
+      }
+      
+      try {
+        const contextData = {
+          contextA: this.contextA,
+          contextB: this.contextB,
+          goal: this.goal
+        }
+        
+        await contextManager.saveContext(contextData)
+        this.showStatus('Контекст сохранен успешно', 'success')
+      } catch (error) {
         console.error('Error saving context:', error)
+        this.showStatus('Ошибка сохранения контекста', 'error')
       }
     },
     
-    // Очистка контекста
     clearContext() {
-      if (confirm('Вы уверены, что хотите очистить весь контекст?')) {
-        contextManager.clearContext()
-        this.contextA = {
-          name: '',
-          role: '',
-          background: '',
-          skills: [],
-          goals: []
-        }
-        this.contextB = {
-          name: '',
-          role: '',
-          company: '',
-          position: '',
-          requirements: [],
-          expectations: []
-        }
-        this.goal = {
-          description: '',
-          successCriteria: [],
-          priority: 'medium',
-          deadline: null
-        }
-        this.showStatus('Контекст очищен', 'info')
+      this.contextA = {
+        name: '',
+        role: '',
+        background: '',
+        skills: [],
+        goals: []
       }
+      this.contextB = {
+        name: '',
+        role: '',
+        company: '',
+        position: '',
+        requirements: [],
+        expectations: []
+      }
+      this.goal = {
+        description: '',
+        successCriteria: [],
+        priority: 'medium',
+        deadline: null,
+        communicationType: 'interview',
+        duration: 60,
+        notes: ''
+      }
+      this.showStatus('Контекст очищен', 'info')
     },
     
-    // Экспорт контекста
     exportContext() {
       try {
-        const contextJson = contextManager.exportContext()
-        const blob = new Blob([contextJson], { type: 'application/json' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `context_${new Date().toISOString().slice(0, 10)}.json`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
+        const contextData = {
+          contextA: this.contextA,
+          contextB: this.contextB,
+          goal: this.goal,
+          exportedAt: new Date().toISOString()
+        }
+        
+        const dataStr = JSON.stringify(contextData, null, 2)
+        const dataBlob = new Blob([dataStr], { type: 'application/json' })
+        const url = URL.createObjectURL(dataBlob)
+        
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `context-${new Date().toISOString().split('T')[0]}.json`
+        link.click()
+        
         URL.revokeObjectURL(url)
         this.showStatus('Контекст экспортирован', 'success')
       } catch (error) {
-        this.showStatus('Ошибка при экспорте контекста', 'error')
         console.error('Error exporting context:', error)
+        this.showStatus('Ошибка экспорта контекста', 'error')
       }
     },
     
-    // Импорт контекста
     importContext() {
       const input = document.createElement('input')
       input.type = 'file'
@@ -472,12 +233,14 @@ export default {
           const reader = new FileReader()
           reader.onload = (e) => {
             try {
-              const context = contextManager.importContext(e.target.result)
-              this.loadContext()
+              const contextData = JSON.parse(e.target.result)
+              this.contextA = { ...this.contextA, ...contextData.contextA }
+              this.contextB = { ...this.contextB, ...contextData.contextB }
+              this.goal = { ...this.goal, ...contextData.goal }
               this.showStatus('Контекст импортирован', 'success')
             } catch (error) {
-              this.showStatus('Ошибка при импорте контекста', 'error')
               console.error('Error importing context:', error)
+              this.showStatus('Ошибка импорта контекста', 'error')
             }
           }
           reader.readAsText(file)
@@ -486,102 +249,23 @@ export default {
       input.click()
     },
     
-    // Добавление навыка
-    addSkill() {
-      if (this.newSkill.trim()) {
-        this.contextA.skills.push(this.newSkill.trim())
-        this.newSkill = ''
-      }
-    },
-    
-    // Удаление навыка
-    removeSkill(index) {
-      this.contextA.skills.splice(index, 1)
-    },
-    
-    // Добавление цели
-    addGoal() {
-      if (this.newGoal.trim()) {
-        this.contextA.goals.push(this.newGoal.trim())
-        this.newGoal = ''
-      }
-    },
-    
-    // Удаление цели
-    removeGoal(index) {
-      this.contextA.goals.splice(index, 1)
-    },
-    
-    // Добавление требования
-    addRequirement() {
-      if (this.newRequirement.trim()) {
-        this.contextB.requirements.push(this.newRequirement.trim())
-        this.newRequirement = ''
-      }
-    },
-    
-    // Удаление требования
-    removeRequirement(index) {
-      this.contextB.requirements.splice(index, 1)
-    },
-    
-    // Добавление ожидания
-    addExpectation() {
-      if (this.newExpectation.trim()) {
-        this.contextB.expectations.push(this.newExpectation.trim())
-        this.newExpectation = ''
-      }
-    },
-    
-    // Удаление ожидания
-    removeExpectation(index) {
-      this.contextB.expectations.splice(index, 1)
-    },
-    
-    // Добавление критерия
-    addCriterion() {
-      if (this.newCriterion.trim()) {
-        this.goal.successCriteria.push(this.newCriterion.trim())
-        this.newCriterion = ''
-      }
-    },
-    
-    // Удаление критерия
-    removeCriterion(index) {
-      this.goal.successCriteria.splice(index, 1)
-    },
-    
-    // Применение моковых данных если контекст пустой
-    applyMockDataIfEmpty() {
-      const contextA = contextManager.getContextA()
-      const contextB = contextManager.getContextB()
-      const goal = contextManager.getGoal()
-      
-      // Если контекст пустой, применяем моковые данные
-      if (!contextA || !contextB || !goal) {
-        console.log('🎭 [CONTEXT] Applying mock data to context manager')
-        
-        // Применяем моковые данные к contextManager
-        contextManager.setContextA(this.contextA)
-        contextManager.setContextB(this.contextB)
-        contextManager.setGoal(this.goal)
-        
-        this.showStatus('Моковый контекст применен автоматически', 'info')
-      }
-    },
-    
-    // Показ статуса
     showStatus(message, type) {
       this.contextStatus = message
-      this.contextStatusClass = {
-        success: 'bg-green-100 text-green-800',
-        error: 'bg-red-100 text-red-800',
-        info: 'bg-blue-100 text-blue-800'
-      }[type]
+      this.contextStatusClass = this.getStatusClass(type)
       
       setTimeout(() => {
         this.contextStatus = ''
+        this.contextStatusClass = ''
       }, 3000)
+    },
+    
+    getStatusClass(type) {
+      const classes = {
+        success: 'bg-green-100 text-green-800 border border-green-200',
+        error: 'bg-red-100 text-red-800 border border-red-200',
+        info: 'bg-blue-100 text-blue-800 border border-blue-200'
+      }
+      return classes[type] || classes.info
     }
   }
 }
@@ -589,26 +273,80 @@ export default {
 
 <style scoped>
 .context-panel {
-  max-height: 80vh;
-  overflow-y: auto;
+  /* Стили для панели контекста */
 }
 
-/* Стили для скроллбара */
-.context-panel::-webkit-scrollbar {
-  width: 6px;
+/* Стили для кнопок */
+.context-panel button {
+  transition: all 0.2s ease-in-out;
 }
 
-.context-panel::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
+.context-panel button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-.context-panel::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
+.context-panel button:active:not(:disabled) {
+  transform: translateY(0);
 }
 
-.context-panel::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+/* Стили для статуса */
+.context-panel .mt-4 {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Анимации */
+.context-panel {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Стили для заголовка */
+.context-panel h2 {
+  position: relative;
+}
+
+.context-panel h2::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  width: 100px;
+  height: 3px;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  border-radius: 2px;
+}
+
+/* Адаптивность */
+@media (max-width: 640px) {
+  .context-panel .flex {
+    flex-direction: column;
+  }
+  
+  .context-panel button {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
 }
 </style>

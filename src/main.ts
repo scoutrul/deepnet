@@ -6,6 +6,9 @@ import './styles/terms.css'
 
 Vue.use(VueCompositionApi)
 
+// Инициализируем stores после Vue.use(VueCompositionApi)
+import './stores'
+
 new Vue({
 	render: (h) => h(App),
 }).$mount('#app')

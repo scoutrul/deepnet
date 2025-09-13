@@ -30,9 +30,9 @@
 
 <script>
 import { v4 as uuid } from 'uuid'
-import Message from '@/components/Message.vue'
-import ChatInput from '@/components/ChatInput.vue'
-import { chatService } from '@/services/chatService'
+import Message from '@/components/chat/Message.vue'
+import ChatInput from '@/components/chat/ChatInput.vue'
+import { chatService } from '@/services/chat/chatService'
 
 export default {
 	name: 'ChatContainer',

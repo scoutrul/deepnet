@@ -1,9 +1,7 @@
 // Context Services - Инициализация всех сервисов контекста
 import { LLMAgent } from './llmAgent'
 import { DialogProcessor } from './dialogProcessor'
-import { ContextManager } from './contextManager'
-import { HintGenerator } from './hintGenerator'
-import { SearchService } from './searchService'
+import { ContextService } from './contextService'
 import { appConfig } from '../../config/appConfig'
 
 // Создание LLM агента
@@ -15,11 +13,15 @@ const llmAgent = new LLMAgent({
 
 // Создание сервисов с LLM агентом
 export const dialogProcessor = new DialogProcessor(llmAgent)
-export const contextManager = new ContextManager()
-export const hintGenerator = new HintGenerator(llmAgent)
-export const searchService = new SearchService(llmAgent)
+export const contextService = new ContextService(llmAgent)
+
+// Обратная совместимость - экспорт старых сервисов через новый
+export const contextManager = contextService
+export const contextAssistant = contextService
+export const hintGenerator = contextService
+export const searchService = contextService
 
 // Экспорт классов для использования в компонентах
-export { DialogProcessor, ContextManager, HintGenerator, SearchService, LLMAgent }
+export { DialogProcessor, ContextService, LLMAgent }
 
 console.log('🎯 [CONTEXT] All context services initialized')

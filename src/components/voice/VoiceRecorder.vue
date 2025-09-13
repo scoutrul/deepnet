@@ -82,7 +82,7 @@
 </template>
 
 <script>
-import { VoiceServiceFactory } from '../../services/voiceServiceFactory'
+import { DeepGramVoiceService } from '../../services/voice/voiceService'
 import { contextManager, dialogProcessor } from '../../services/context'
 import { appConfig } from '../../config/appConfig'
 
@@ -131,15 +131,15 @@ export default {
         console.log('🎤 [VOICE] DeepGram config:', deepgramConfig)
         
         if (deepgramConfig && deepgramConfig.apiKey) {
-          VoiceServiceFactory.setDeepGramConfig(deepgramConfig)
           this.isDeepGramMode = true
           console.log('🎤 [VOICE] Using DeepGram mode with API key:', deepgramConfig.apiKey.substring(0, 10) + '...')
+          
+          this.voiceService = new DeepGramVoiceService(deepgramConfig)
+          console.log('🎤 [VOICE] DeepGram voice service created:', this.voiceService)
         } else {
-          console.log('🎤 [VOICE] Using Web Speech API mode (no DeepGram API key)')
+          console.log('🎤 [VOICE] DeepGram API key not found, voice service will not be available')
+          return
         }
-        
-        this.voiceService = VoiceServiceFactory.createVoiceService()
-        console.log('🎤 [VOICE] Voice service created:', this.voiceService)
         
         // Подписываемся на события
         this.voiceService.onTranscription(this.handleTranscription.bind(this))

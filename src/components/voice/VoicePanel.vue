@@ -84,9 +84,9 @@
 
 <script>
 import TagFeed from './TagFeed.vue'
-import { createPhraseParser } from '../../services/phraseParser'
-import { createTagManager } from '../../services/tagManager'
-import { createVoiceService } from '../../services/voiceService'
+import { createPhraseParser } from '../../services/voice/phraseParser'
+import { createTagManager } from '../../services/voice/tagManager'
+import { DeepGramVoiceService } from '../../services/voice/voiceService'
 
 export default {
   name: 'VoicePanel',
@@ -124,7 +124,13 @@ export default {
         })
 
         // Initialize voice service
-        this.voiceService = createVoiceService()
+        this.voiceService = new DeepGramVoiceService({
+          apiKey: import.meta.env.VITE_DEEPGRAM_API_KEY || localStorage.getItem('deepgram_api_key'),
+          model: 'nova-3',
+          language: 'ru-RU',
+          streaming: true,
+          interimResults: true
+        })
 
         // Set up event handlers
         this.tagManager.onUpdate(this.handleTagUpdate)
