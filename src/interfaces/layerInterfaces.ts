@@ -65,6 +65,25 @@ export interface VoiceServiceInterface extends BusinessService {
   onStateChange(callback: (state: string) => void): void
 }
 
+// Интерфейс для системного аудио
+export interface SystemAudioInterface extends BusinessService {
+  // Управление записью системного звука
+  startSystemAudioCapture(): Promise<void>
+  stopSystemAudioCapture(): void
+  
+  // Проверка поддержки
+  isSupported(): boolean
+  
+  // Получение состояния
+  isCapturing(): boolean
+  getAudioStream(): MediaStream | null
+  
+  // События
+  onAudioData(callback: (audioBlob: Blob) => void): void
+  onError(callback: (error: any) => void): void
+  onStateChange(callback: (isCapturing: boolean) => void): void
+}
+
 // Интерфейс для чат сервисов
 export interface ChatServiceInterface extends BusinessService {
   // Отправка сообщений

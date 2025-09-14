@@ -6,11 +6,6 @@ export const appConfig = {
       const envKey = import.meta.env.VITE_DEEPGRAM_API_KEY
       const localKey = localStorage.getItem('deepgram_api_key')
       const finalKey = envKey || localKey
-      console.log('🔑 [CONFIG] DeepGram API Key sources:')
-      console.log('🔑 [CONFIG] - VITE_DEEPGRAM_API_KEY:', envKey)
-      console.log('🔑 [CONFIG] - localStorage:', localKey)
-      console.log('🔑 [CONFIG] - Final key:', finalKey)
-      console.log('🔑 [CONFIG] - Key length:', finalKey?.length)
       return finalKey
     })(),
     model: 'nova-3',
@@ -117,7 +112,6 @@ export const appConfig = {
 // Helper functions
 export const getDeepGramConfig = () => {
   if (!appConfig.deepgram.apiKey) {
-    console.warn('DeepGram API key not found')
     return null
   }
   return appConfig.deepgram
@@ -125,7 +119,6 @@ export const getDeepGramConfig = () => {
 
 export const getLLMConfig = () => {
   if (!appConfig.llm.apiKey) {
-    console.warn('LLM API key not found')
     return null
   }
   return appConfig.llm

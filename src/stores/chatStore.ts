@@ -56,7 +56,6 @@ export const chatActions = {
     chatState.totalMessages = chatState.messages.length
     chatState.lastActivity = Date.now()
     stateActions.updateTimestamp()
-    console.log('💬 [CHAT] Message added:', message.id)
   },
   
   // Обновление сообщения
@@ -65,7 +64,6 @@ export const chatActions = {
     if (index > -1) {
       chatState.messages[index] = { ...chatState.messages[index], ...updates }
       chatState.lastActivity = Date.now()
-      console.log('💬 [CHAT] Message updated:', messageId, updates)
     }
   },
   
@@ -76,7 +74,6 @@ export const chatActions = {
       chatState.messages.splice(index, 1)
       chatState.totalMessages = chatState.messages.length
       chatState.lastActivity = Date.now()
-      console.log('💬 [CHAT] Message removed:', messageId)
     }
   },
   
@@ -85,69 +82,59 @@ export const chatActions = {
     chatState.messages = []
     chatState.totalMessages = 0
     chatState.lastActivity = Date.now()
-    console.log('💬 [CHAT] All messages cleared')
   },
   
   // Установка текущего сообщения
   setCurrentMessage(message: ChatMessage | null) {
     chatState.currentMessage = message
-    console.log('💬 [CHAT] Current message set:', message?.id || 'null')
   },
   
   // Установка выбранного сообщения
   setSelectedMessage(message: ChatMessage | null) {
     chatState.selectedMessage = message
-    console.log('💬 [CHAT] Selected message set:', message?.id || 'null')
   },
   
   // Повторная отправка сообщения
   retryMessage(messageId: string) {
     const message = chatState.messages.find((m: ChatMessage) => m.id === messageId)
     if (message) {
-      console.log('💬 [CHAT] Retrying message:', messageId)
+      // Retrying message
     }
   },
   
   // Редактирование сообщения
   editMessage(messageId: string, newText: string) {
     this.updateMessage(messageId, { content: newText })
-    console.log('💬 [CHAT] Message edited:', messageId)
   },
   
   // Удаление сообщения
   deleteMessage(messageId: string) {
     this.removeMessage(messageId)
-    console.log('💬 [CHAT] Message deleted:', messageId)
   },
   
   // Установка состояния загрузки
   setLoading(isLoading: boolean) {
     chatState.loading = isLoading
-    console.log('💬 [CHAT] Loading state:', isLoading)
   },
   
   // Установка ошибки
   setError(message: string | null) {
     chatState.error = message
-    console.log('💬 [CHAT] Error set:', message)
   },
   
   // Установка состояния таймаута
   setIsTimeout(isTimeout: boolean) {
     chatState.isTimeout = isTimeout
-    console.log('💬 [CHAT] Is timeout:', isTimeout)
   },
   
   // Установка состояния отправки
   setIsSending(isSending: boolean) {
     chatState.isSending = isSending
-    console.log('💬 [CHAT] Is sending:', isSending)
   },
   
   // Добавление термина в очередь
   addToQueue(term: any) {
     chatState.queuedTerms.push(term)
-    console.log('💬 [CHAT] Term added to queue:', term.text)
   },
   
   // Удаление термина из очереди
@@ -155,77 +142,67 @@ export const chatActions = {
     const index = chatState.queuedTerms.findIndex((t: any) => t.id === termId)
     if (index > -1) {
       chatState.queuedTerms.splice(index, 1)
-      console.log('💬 [CHAT] Term removed from queue:', termId)
     }
   },
   
   // Очистка очереди
   clearQueue() {
     chatState.queuedTerms = []
-    console.log('💬 [CHAT] Queue cleared')
   },
   
   // Отправка очереди
   sendQueued() {
-    console.log('💬 [CHAT] Sending queued terms')
+    // Sending queued terms
   },
   
   // Установка выделенного текста
   setSelectedText(selection: any) {
     chatState.selectedText = selection
-    console.log('💬 [CHAT] Text selected:', selection?.text || 'null')
   },
   
   // Очистка выделения
   clearSelection() {
     chatState.selectedText = null
-    console.log('💬 [CHAT] Selection cleared')
   },
   
   // Обработка клика по слову
-  handleWordClick(word: string) {
-    console.log('💬 [CHAT] Word clicked:', word)
+  handleWordClick(_word: string) {
+    // Word clicked
   },
   
   // Обработка клика по термину
-  handleTermClick(term: any) {
-    console.log('💬 [CHAT] Term clicked:', term.text)
+  handleTermClick(_term: any) {
+    // Term clicked
   },
   
   // Установка уровня детализации
   setDetailLevel(level: 'short' | 'extended' | 'max') {
     chatState.settings.detailLevel = level
-    console.log('💬 [CHAT] Detail level set:', level)
   },
   
   // Установка использования предыдущего контекста
   setUsePreviousContext(use: boolean) {
     chatState.settings.usePreviousContext = use
-    console.log('💬 [CHAT] Use previous context:', use)
   },
   
   // Установка автоскролла
   setAutoScroll(scroll: boolean) {
     chatState.settings.autoScroll = scroll
-    console.log('💬 [CHAT] Auto scroll:', scroll)
   },
   
   // Установка отображения временных меток
   setShowTimestamps(show: boolean) {
     chatState.settings.showTimestamps = show
-    console.log('💬 [CHAT] Show timestamps:', show)
   },
   
   // Установка отображения метаданных в настройках
   setShowMetadataSetting(show: boolean) {
     chatState.settings.showMetadata = show
-    console.log('💬 [CHAT] Show metadata setting:', show)
   },
   
   // Обновление настроек
   updateSettings(updates: any) {
     chatState.settings = { ...chatState.settings, ...updates }
-    console.log('💬 [CHAT] Settings updated:', updates)
   },
   
   // Генерация уникального ID
@@ -246,15 +223,13 @@ export const chatActions = {
   
   // Инициализация
   initialize() {
-    console.log('💬 [CHAT] Chat store initialized')
+    // Chat store initialized
   },
 
   // ==================== ДИАРИЗАЦИЯ ДИАЛОГОВ ====================
 
   // Очистка диалога
   clearDialog() {
-    console.log('💬 [CHAT] Clearing dialog...')
-    
     // Очищаем диаризованные сообщения
     chatState.diarizedMessages = []
     chatState.speakers = {}
@@ -264,18 +239,15 @@ export const chatActions = {
     chatState.diarizationState = {
       isActive: false,
       isConnecting: false,
+      isPaused: false,
       error: null,
       speakers: {},
       activeSegments: {}
     }
-    
-    console.log('💬 [CHAT] Dialog cleared')
   },
 
   // Добавление диаризованного сегмента
   appendDiarizedSegment(segment: DiarizedSegment) {
-    console.log('💬 [CHAT] Appending diarized segment:', segment.speakerName, segment.text)
-    
     // Обновляем активные сегменты
     if (!segment.isFinal) {
       chatState.activeSegments[segment.speakerId] = segment
@@ -291,8 +263,6 @@ export const chatActions = {
 
   // 🔧 ИСПРАВЛЕНИЕ: Создание или обновление диаризованного сообщения (для всех сегментов)
   createOrUpdateDiarizedMessage(segment: DiarizedSegment) {
-    console.log('💬 [CHAT] 🔧 Creating/updating message for segment:', segment.text, 'isFinal:', segment.isFinal)
-    
     // Ищем активное сообщение от того же спикера
     const existingMessageIndex = chatState.diarizedMessages.findIndex(
       msg => msg.speakerId === segment.speakerId && msg.isActive
@@ -308,7 +278,6 @@ export const chatActions = {
     if (existingMessageIndex >= 0 && !shouldCreateNewMessage) {
       // Обновляем существующее активное сообщение (в пределах таймаута)
       const existingMessage = chatState.diarizedMessages[existingMessageIndex]
-      console.log('💬 [CHAT] 🔧 Updating existing message:', existingMessage.content, '→', segment.text)
       
       existingMessage.content = segment.text  // DeepGram дает полный обновленный текст
       existingMessage.segments.push(segment)
@@ -319,7 +288,6 @@ export const chatActions = {
       if (shouldCreateNewMessage) {
         chatState.diarizedMessages.forEach(msg => {
           if (msg.isActive) {
-            console.log('💬 [CHAT] 🔧 Finalizing previous message:', msg.content)
             msg.isActive = false
           }
         })
@@ -338,29 +306,22 @@ export const chatActions = {
         isActive: !segment.isFinal  // Активно пока не финальное
       }
       
-      console.log('💬 [CHAT] 🔧 Created new message:', message.content, 'isActive:', message.isActive)
       chatState.diarizedMessages.push(message)
     }
-
-    console.log('💬 [CHAT] 🔧 Total diarized messages:', chatState.diarizedMessages.length)
   },
 
   // Обновление состояния диаризации
   updateDiarizationState(state: Partial<DiarizationState>) {
     chatState.diarizationState = { ...chatState.diarizationState, ...state }
-    console.log('💬 [CHAT] Diarization state updated:', state)
   },
 
   // Добавление спикера
   addSpeaker(speaker: DiarizedSpeaker) {
     chatState.speakers[speaker.id] = speaker
-    console.log('💬 [CHAT] Speaker added:', speaker.displayName)
   },
 
   // Очистка состояния
   cleanup() {
-    console.log('💬 [CHAT] Cleaning up chat store...')
-    
     // Очищаем сообщения
     chatState.messages = []
     chatState.currentMessage = null
@@ -389,12 +350,11 @@ export const chatActions = {
     chatState.diarizationState = {
       isActive: false,
       isConnecting: false,
+      isPaused: false,
       error: null,
       speakers: {},
       activeSegments: {}
     }
-    
-    console.log('💬 [CHAT] Chat store cleaned up')
   }
 }
 
@@ -446,4 +406,4 @@ export const useChatStore = () => ({
 // Экспорт состояния для прямого доступа
 export { chatState }
 
-console.log('💬 [CHAT] Chat store initialized')
+// Chat store initialized

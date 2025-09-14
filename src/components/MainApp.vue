@@ -22,20 +22,28 @@
                     'px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2',
                     isRecording 
                       ? 'text-white bg-red-500 hover:bg-red-600 shadow-lg' 
-                      : 'text-green-600 bg-green-50 hover:bg-green-100 border border-green-200'
+                      : (isInitializing || isDiarizationConnecting)
+                        ? 'text-gray-500 bg-gray-100 cursor-not-allowed'
+                        : 'text-green-600 bg-green-50 hover:bg-green-100 border border-green-200'
                   ]"
-                  :disabled="isDiarizationConnecting"
+                  :disabled="isInitializing || isDiarizationConnecting"
                 >
                   <div 
                     :class="[
                       'w-3 h-3 rounded-full',
-                      isRecording ? 'bg-white animate-pulse' : 'bg-green-500'
+                      isRecording 
+                        ? 'bg-white animate-pulse' 
+                        : (isInitializing || isDiarizationConnecting)
+                          ? 'bg-gray-400 animate-spin'
+                          : 'bg-green-500'
                     ]"
                   ></div>
-                  <span v-if="isDiarizationConnecting">Подключение...</span>
+                  <span v-if="isInitializing">Инициализация...</span>
+                  <span v-else-if="isDiarizationConnecting">Подключение...</span>
                   <span v-else-if="isRecording">Остановить запись</span>
                   <span v-else>Начать запись</span>
                 </button>
+
                 
                 <!-- Кнопка очистки -->
                 <button
@@ -80,7 +88,19 @@
               <div v-if="isRecording" class="text-center py-4">
                 <div class="inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-lg">
                   <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                  <span class="text-sm font-medium text-red-700">Идет запись...</span>
+                  <span class="text-sm font-medium text-red-700">
+                    Идет запись {{ audioSourcesText }}...
+                  </span>
+                </div>
+                <div v-if="audioMixerState" class="mt-2 text-xs text-gray-600">
+                  <div class="flex justify-center gap-4">
+                    <span :class="isMicrophoneActive ? 'text-green-600' : 'text-red-500'">
+                      🎤 Микрофон: {{ isMicrophoneActive ? 'активен' : 'недоступен' }}
+                    </span>
+                    <span :class="isSystemAudioActive ? 'text-green-600' : 'text-orange-500'">
+                      🔊 Системный звук: {{ isSystemAudioActive ? 'активен' : 'недоступен' }}
+                    </span>
+                  </div>
                 </div>
                 <div v-if="!hasDeepGramKey" class="mt-2 text-xs text-amber-600">
                   ⚠️ Запись без диаризации (DeepGram не настроен)
@@ -94,6 +114,18 @@
               <div v-if="!hasDiarizedMessages && messages.length === 0 && !isRecording" class="text-gray-500 text-sm text-center py-8">
                 <div class="mb-2">🎭 Диаризация диалогов</div>
                 <div class="text-xs">Нажмите "Начать запись" для распознавания речи</div>
+                <div class="mt-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                  💡 Автоматический захват микрофона и системного звука одновременно
+                  <div class="mt-1 text-xs text-blue-500">
+                    Распознавание речи из всех источников: микрофон + приложения + вкладки
+                  </div>
+                </div>
+                <div v-if="isMacOS" class="mt-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                  🍎 macOS: Решение для системного звука
+                  <div class="mt-1 text-xs text-blue-500">
+                    <strong>Работает:</strong> Откройте Zoom/встречи в другом браузере, а это приложение - в текущем. Тогда микрофон будет захватывать звук из динамиков!
+                  </div>
+                </div>
                 <div v-if="!hasDeepGramKey" class="mt-2 text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
                   ⚠️ DeepGram API ключ не настроен - запись будет работать без диаризации
                   <div class="mt-1 text-xs text-amber-500">
@@ -218,9 +250,13 @@ export default {
       
       // Состояние записи диаризации
       isRecording: false,
+      isInitializing: false, // Состояние инициализации
       mediaRecorder: null,
       audioStream: null,
-      audioBuffer: [] // Буфер для аудио данных до подключения DeepGram
+      audioBuffer: [], // Буфер для аудио данных до подключения DeepGram
+      
+      // Состояние микшера
+      audioMixerState: null
     }
   },
   computed: {
@@ -261,18 +297,39 @@ export default {
     hasDeepGramKey() {
       const apiKey = import.meta.env.VITE_DEEPGRAM_API_KEY || localStorage.getItem('deepgram_api_key')
       return apiKey && apiKey.length >= 10
+    },
+
+    // Состояние микшера
+    isMicrophoneActive() {
+      return this.audioMixerState?.microphone?.isActive || false
+    },
+
+    isSystemAudioActive() {
+      return this.audioMixerState?.systemAudio?.isActive || false
+    },
+
+    audioSourcesText() {
+      const sources = []
+      if (this.isMicrophoneActive) sources.push('микрофон')
+      if (this.isSystemAudioActive) sources.push('системный звук')
+      return sources.length > 0 ? `(${sources.join(' + ')})` : ''
+    },
+
+    // Определение macOS
+    isMacOS() {
+      return /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
     }
   },
   async mounted() {
     await this.initializeApp()
+    // Получаем начальное состояние микшера
+    this.audioMixerState = this.adapter.getData('audioMixer.state')
   },
   beforeDestroy() {
     this.cleanup()
   },
   methods: {
     async initializeApp() {
-      console.log('🚀 [APP] Initializing DeepNet Context System...')
-      
       try {
         // Инициализируем сервисы через адаптер
         await this.adapter.initializeServices()
@@ -284,7 +341,6 @@ export default {
         
         // Инициализируем диаризацию если DeepGram доступен
         if (this.isDeepGramMode) {
-          console.log('🎭 [APP] Initializing diarization service...')
           await this.initializeDiarization()
         }
         
@@ -293,10 +349,7 @@ export default {
         
         // Загружаем существующие сообщения
         this.loadMessages()
-        
-        console.log('🚀 [APP] App initialized successfully')
       } catch (error) {
-        console.error('🚀 [APP] Failed to initialize app:', error)
         this.connectionStatus = 'Ошибка инициализации'
       }
     },
@@ -305,11 +358,8 @@ export default {
       // Получаем контекст через адаптер
       const context = this.adapter.getData('context.context')
       if (!context) {
-        console.log('🎯 [APP] No context found, user needs to set up context')
         return
       }
-      
-      console.log('🎯 [APP] Context loaded:', context)
     },
 
     loadMessages() {
@@ -319,7 +369,7 @@ export default {
         try {
           this.messages = JSON.parse(savedMessages)
         } catch (error) {
-          console.error('Failed to load messages:', error)
+          // Ошибка загрузки сообщений
         }
       }
     },
@@ -332,8 +382,6 @@ export default {
     // Инициализация диаризации
     async initializeDiarization() {
       try {
-        console.log('🎭 [APP] Initializing diarization...')
-        
         // Подписываемся на события диаризации
         this.adapter.getChatStore().actions.updateDiarizationState({
           isConnecting: true,
@@ -343,17 +391,13 @@ export default {
         // Инициализируем сервис диаризации (но не запускаем)
         // Сервис уже инициализирован при создании, просто проверяем состояние
         const diarizationState = this.adapter.getDiarizationState()
-        console.log('🎭 [APP] Diarization state:', diarizationState)
         
         this.adapter.getChatStore().actions.updateDiarizationState({
           isConnecting: false,
           isActive: false,
           error: null
         })
-        
-        console.log('🎭 [APP] Diarization initialized successfully')
       } catch (error) {
-        console.error('🎭 [APP] Error initializing diarization:', error)
         this.adapter.getChatStore().actions.updateDiarizationState({
           isConnecting: false,
           isActive: false,
@@ -386,7 +430,6 @@ export default {
     // ==================== ДИАРИЗАЦИЯ ДИАЛОГОВ ====================
 
     clearDialog() {
-      console.log('🎭 [APP] Clearing dialog...')
       this.adapter.getChatStore().actions.clearDialog()
     },
 
@@ -399,11 +442,69 @@ export default {
       }
     },
 
-    // Начало записи
+    // Запуск записи со всех доступных источников
     async startRecording() {
       try {
-        console.log('🎤 [APP] Starting recording...')
-        
+        this.isInitializing = true
+        console.log('🎧 [UI] Запуск записи со всех источников...')
+
+        // Запускаем диаризацию (если DeepGram доступен)
+        if (this.isDeepGramMode) {
+          // Проверяем, была ли диаризация приостановлена
+          const diarizationState = this.adapter.getChatStore().getters.diarizationState()
+          console.log('🎧 [UI] Текущее состояние диаризации:', diarizationState)
+          
+          if (diarizationState.isPaused) {
+            console.log('🎧 [UI] Возобновляем приостановленную диаризацию')
+            await this.adapter.resumeDiarization()
+          } else {
+            console.log('🎧 [UI] Запускаем новую диаризацию')
+            await this.adapter.startDiarization()
+          }
+        }
+
+        // Запускаем микширование аудио (микрофон + системный звук)
+        await this.adapter.executeAction('audioMixer.start')
+
+        // Обновляем состояние микшера
+        this.audioMixerState = this.adapter.getData('audioMixer.state')
+
+        this.isRecording = true
+        this.isInitializing = false
+        console.log('🎧 [UI] Запись запущена успешно')
+      } catch (error) {
+        this.isInitializing = false
+        console.error('🎧 [UI] Ошибка запуска записи:', error)
+        this.showError('Не удалось начать запись: ' + error.message)
+      }
+    },
+
+    async stopRecording() {
+      try {
+        console.log('🎧 [UI] Остановка записи...')
+
+        // Останавливаем микширование
+        await this.adapter.executeAction('audioMixer.stop')
+
+        // Приостанавливаем диаризацию (если DeepGram доступен) - сохраняем соединение
+        if (this.isDeepGramMode) {
+          this.adapter.pauseDiarization()
+        }
+
+        // Обновляем состояние микшера
+        this.audioMixerState = this.adapter.getData('audioMixer.state')
+
+        this.isRecording = false
+        console.log('🎧 [UI] Запись остановлена успешно')
+      } catch (error) {
+        console.error('🎧 [UI] Ошибка остановки записи:', error)
+        this.showError('Ошибка при остановке записи: ' + error.message)
+      }
+    },
+
+    // Начало записи с микрофона
+    async startMicrophoneRecording() {
+      try {
         // Запрашиваем доступ к микрофону
         this.audioStream = await navigator.mediaDevices.getUserMedia({ 
           audio: {
@@ -429,13 +530,9 @@ export default {
         for (const type of supportedTypes) {
           if (MediaRecorder.isTypeSupported(type)) {
             mimeType = type
-            console.log('🎤 [APP] Selected MIME type:', mimeType)
             break
           }
         }
-        
-        console.log('🎤 [APP] Using MIME type:', mimeType)
-        console.log('🎤 [APP] Supported types:', supportedTypes.filter(type => MediaRecorder.isTypeSupported(type)))
         
         this.mediaRecorder = new MediaRecorder(this.audioStream, {
           mimeType: mimeType
@@ -450,7 +547,7 @@ export default {
         
         // Обработчик остановки
         this.mediaRecorder.onstop = () => {
-          console.log('🎤 [APP] Recording stopped')
+          // Запись остановлена
         }
         
         // Запускаем диаризацию (если DeepGram доступен)
@@ -460,31 +557,23 @@ export default {
           // Ждем небольшую задержку для подключения, затем отправляем буфер
           setTimeout(() => {
             const diarizationState = this.adapter.getDiarizationState()
-            console.log('🎤 [APP] 🎭 Checking diarization state after delay:', diarizationState)
             if (diarizationState.isActive) {
               this.flushAudioBuffer()
             }
           }, 1000) // Ждем 1 секунду для подключения
-        } else {
-          console.log('🎤 [APP] DeepGram not available - recording without diarization')
         }
         
         // Начинаем запись с чанками 1000мс
         this.mediaRecorder.start(1000) // Отправляем данные каждую секунду
         this.isRecording = true
-        
-        console.log('🎤 [APP] Recording started successfully')
       } catch (error) {
-        console.error('🎤 [APP] Error starting recording:', error)
         this.showError('Не удалось начать запись: ' + error.message)
       }
     },
 
-    // Остановка записи
-    async stopRecording() {
+    // Остановка записи с микрофона
+    async stopMicrophoneRecording() {
       try {
-        console.log('🎤 [APP] Stopping recording...')
-        
         if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
           this.mediaRecorder.stop()
         }
@@ -504,77 +593,120 @@ export default {
         
         // Очищаем буфер аудио данных
         this.audioBuffer = []
-        console.log('🎤 [APP] 🧹 Audio buffer cleared on stop')
-        
-        console.log('🎤 [APP] Recording stopped successfully')
       } catch (error) {
-        console.error('🎤 [APP] Error stopping recording:', error)
         this.showError('Ошибка при остановке записи: ' + error.message)
       }
+    },
+
+    // Начало записи системного звука
+    async startSystemAudioRecording() {
+      try {
+        console.log('🔊 [UI] Запуск записи системного звука...')
+        
+        // Запускаем диаризацию (если DeepGram доступен)
+        if (this.isDeepGramMode) {
+          await this.adapter.startDiarization()
+        }
+        
+        // Запускаем захват системного звука
+        await this.adapter.executeAction('systemAudio.start')
+        
+        this.isRecording = true
+        console.log('🔊 [UI] Запись системного звука запущена')
+      } catch (error) {
+        console.error('🔊 [UI] Ошибка запуска записи системного звука:', error)
+        this.showError('Не удалось начать запись системного звука: ' + error.message)
+        
+        // Автоматический fallback на микрофон при критических ошибках
+        if (error.message.includes('отклонил') || error.message.includes('не поддерживается')) {
+          console.log('🔊 [UI] Автоматическое переключение на микрофон...')
+          this.audioSource = 'microphone'
+          setTimeout(async () => {
+            try {
+              await this.startMicrophoneRecording()
+              this.showError('Переключились на запись с микрофона')
+            } catch (micError) {
+              console.error('🔊 [UI] Ошибка fallback на микрофон:', micError)
+            }
+          }, 1000)
+        }
+      }
+    },
+
+    // Остановка записи системного звука
+    async stopSystemAudioRecording() {
+      try {
+        console.log('🔊 [UI] Остановка записи системного звука...')
+        
+        // Останавливаем захват системного звука
+        await this.adapter.executeAction('systemAudio.stop')
+        
+        // Останавливаем диаризацию (если DeepGram доступен)
+        if (this.isDeepGramMode) {
+          await this.adapter.stopDiarization()
+        }
+        
+        this.isRecording = false
+        console.log('🔊 [UI] Запись системного звука остановлена')
+      } catch (error) {
+        console.error('🔊 [UI] Ошибка остановки записи системного звука:', error)
+        this.showError('Ошибка при остановке записи системного звука: ' + error.message)
+      }
+    },
+
+
+    // Показ сообщения об успехе
+    showSuccess(message) {
+      // Можно добавить позже через уведомления
+      console.log('✅ [UI]', message)
     },
 
     // Обработка аудио данных с буферизацией
     async handleAudioData(audioBlob) {
       try {
-        console.log('🎤 [APP] 📦 Audio blob received, size:', audioBlob.size, 'bytes, type:', audioBlob.type)
-        
         if (this.isDeepGramMode) {
           // 🎯 ИСПРАВЛЕНИЕ: Используем Blob напрямую как в официальной документации!
           // Официальный пример: connection.send(event.data) где event.data - это Blob
-          console.log('🎤 [APP] 📦 Using Blob directly for DeepGram (official way), type:', audioBlob.type, 'size:', audioBlob.size)
           
           // Проверяем состояние диаризации
           const diarizationState = this.adapter.getDiarizationState()
-          console.log('🎤 [APP] 🎭 Diarization state:', diarizationState.isActive, diarizationState.isConnecting)
           
           if (diarizationState.isActive) {
             // DeepGram активен - сначала отправляем буфер, потом текущие данные
             if (this.audioBuffer.length > 0) {
-              console.log('🎤 [APP] 🚀 Flushing buffer before sending new data...')
               await this.flushAudioBuffer()
             }
             
             // Отправляем текущие данные - Blob напрямую!
-            console.log('🎤 [APP] 🎭 Sending Blob to active DeepGram connection...')
             await this.adapter.sendAudioToDiarization(audioBlob)
           } else {
             // DeepGram не активен или подключается - буферизуем Blob
-            console.log('🎤 [APP] 📦 Buffering Blob (DeepGram not ready)...')
             this.audioBuffer.push(audioBlob)
-            console.log('🎤 [APP] 📦 Buffer size:', this.audioBuffer.length, 'chunks')
             
             // Ограничиваем размер буфера (максимум 20 чанков = ~5 секунд)
             if (this.audioBuffer.length > 20) {
-              console.log('🎤 [APP] 🗑️ Buffer overflow, removing oldest chunk')
               this.audioBuffer.shift()
             }
           }
-        } else {
-          console.log('🎤 [APP] Audio data received but DeepGram not available')
         }
       } catch (error) {
-        console.error('🎤 [APP] Error handling audio data:', error)
+        // Ошибка обработки аудио данных
       }
     },
 
     // Отправка буферизованных данных
     async flushAudioBuffer() {
       if (this.audioBuffer.length > 0 && this.isDeepGramMode) {
-        console.log('🎤 [APP] 🚀 Flushing audio buffer:', this.audioBuffer.length, 'chunks')
-        
         for (const audioBlob of this.audioBuffer) {
           try {
             await this.adapter.sendAudioToDiarization(audioBlob)
-            console.log('🎤 [APP] ✅ Sent buffered audio Blob, size:', audioBlob.size)
           } catch (error) {
-            console.error('🎤 [APP] ❌ Failed to send buffered audio:', error)
             break
           }
         }
         
         // Очищаем буфер
         this.audioBuffer = []
-        console.log('🎤 [APP] 🧹 Audio buffer cleared')
       }
     },
 
@@ -589,7 +721,6 @@ export default {
         
         // Проверяем, можем ли мы декодировать данные
         if (arrayBuffer.byteLength === 0) {
-          console.warn('🎤 [APP] Empty audio data')
           await audioContext.close()
           return null
         }
@@ -604,11 +735,6 @@ export default {
         
         return pcmData
       } catch (error) {
-        console.error('🎤 [APP] Error converting WebM to PCM:', error)
-        console.log('🎤 [APP] Blob details:', {
-          size: audioBlob.size,
-          type: audioBlob.type
-        })
         return null
       }
     },
@@ -626,7 +752,6 @@ export default {
       let processedData = audioBuffer.getChannelData(0)
       
       if (sampleRate !== targetSampleRate) {
-        console.log('🎤 [APP] Resampling from', sampleRate, 'to', targetSampleRate)
         processedData = this.resampleAudio(processedData, sampleRate, targetSampleRate)
       }
       
@@ -640,8 +765,6 @@ export default {
         const sample = Math.max(-1, Math.min(1, processedData[i]))
         pcmView[i] = sample * 0x7FFF
       }
-      
-      console.log('🎤 [APP] PCM conversion: length=', processedData.length, 'sampleRate=', targetSampleRate, 'channels=1')
       
       return pcmData
     },
@@ -662,38 +785,31 @@ export default {
 
     // Показ ошибки
     showError(message) {
-      console.error('❌ [APP] Error:', message)
       // Здесь можно добавить уведомления пользователю
     },
 
 
     onRetry(message) {
-      console.log('🔄 [APP] Retry message:', message)
       // Повторяем сообщение
     },
 
     onClarify(message) {
-      console.log('❓ [APP] Clarify message:', message)
       // Запрашиваем уточнение
     },
 
     onWordClick(word) {
-      console.log('🔍 [APP] Word clicked:', word)
       // Обрабатываем клик по слову
     },
 
     onRespondAsUser(message) {
-      console.log('👤 [APP] Respond as user:', message)
       // Отвечаем как пользователь
     },
 
     onContinueAsBot(message) {
-      console.log('🤖 [APP] Continue as bot:', message)
       // Продолжаем как бот
     },
 
     onUseInChat(content) {
-      console.log('💬 [APP] Use in chat:', content)
       // Используем контент в чате
       this.addMessage({
         id: Date.now().toString(),
@@ -707,15 +823,11 @@ export default {
 
     // Message management
     addMessage(message) {
-      console.log('💬 [APP] Adding message:', message)
       this.messages.push(message)
-      console.log('💬 [APP] Total messages:', this.messages.length)
       this.saveMessages()
     },
 
     async processMessage(text) {
-      console.log('💬 [APP] Processing message:', text)
-      
       // Показываем индикатор загрузки
       this.loading = true
       
@@ -730,8 +842,6 @@ export default {
           }
         })
         
-        console.log('💬 [APP] LLM response:', response)
-        
         // Добавляем ответ бота
         this.addMessage({
           id: Date.now().toString(),
@@ -743,8 +853,6 @@ export default {
         })
         
       } catch (error) {
-        console.error('💬 [APP] Error processing message:', error)
-        
         // Добавляем сообщение об ошибке
         this.addMessage({
           id: Date.now().toString(),
@@ -761,8 +869,6 @@ export default {
     },
 
     cleanup() {
-      console.log('🚀 [APP] Cleaning up app...')
-      
       // Останавливаем запись если активна
       if (this.isRecording) {
         this.stopRecording()
@@ -780,8 +886,6 @@ export default {
       
       // Очищаем ресурсы через адаптер
       this.adapter.cleanup()
-      
-      console.log('🚀 [APP] App cleaned up')
     }
   }
 }

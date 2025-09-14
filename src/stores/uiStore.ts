@@ -144,6 +144,17 @@ export const uiActions = {
     
     console.log('🎨 [UI] Notification added:', newNotification.message)
   },
+
+  // Показ ошибки (через уведомления)
+  showError(message: string) {
+    this.addNotification({
+      type: 'error',
+      message: message,
+      duration: 5000,
+      persistent: false
+    })
+    console.error('🎨 [UI] Error shown:', message)
+  },
   
   // Удаление уведомления
   removeNotification(id: string) {

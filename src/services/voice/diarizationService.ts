@@ -15,11 +15,13 @@ export class DiarizationService {
   private connection: any = null
   private isActive = false
   private isConnecting = false
+  private isPaused = false // Состояние паузы
   private error: string | null = null
   private speakers: Record<string, DiarizedSpeaker> = {}
   private activeSegments: Record<string, DiarizedSegment> = {}
   private speakerCounter = 0
   private eventListeners: Partial<DiarizationServiceEvents> = {}
+  private keepaliveInterval: NodeJS.Timeout | null = null
   
   // 🔧 ВРЕМЕННАЯ ЛОГИКА: Отслеживание смены спикеров
   private currentSpeakerId: string | null = null
@@ -27,21 +29,14 @@ export class DiarizationService {
   private lastSegmentTime: number | null = null
 
   constructor() {
-    console.log('🎭 [DIARIZATION] Service initialized')
     this.initializeDeepGram().catch(error => {
-      console.error('🎭 [DIARIZATION] Failed to initialize:', error)
+      console.error('🎤 [DIARIZATION] Ошибка инициализации:', error)
     })
   }
 
   private async initializeDeepGram(): Promise<void> {
     try {
-      console.log('🎭 [DIARIZATION] Initializing DeepGram client...')
-      console.log('🎭 [DIARIZATION] API Key from config:', appConfig.deepgram.apiKey)
-      console.log('🎭 [DIARIZATION] API Key type:', typeof appConfig.deepgram.apiKey)
-      console.log('🎭 [DIARIZATION] API Key length:', appConfig.deepgram.apiKey?.length)
-      
       if (!appConfig.deepgram.apiKey) {
-        console.warn('🎭 [DIARIZATION] API ключ не предоставлен, диаризация недоступна')
         this.deepgram = null
         return
       }
@@ -49,40 +44,28 @@ export class DiarizationService {
       // DeepGram API ключи не имеют фиксированного префикса
       // Проверяем только что ключ не пустой и имеет разумную длину
       if (appConfig.deepgram.apiKey.length < 10) {
-        console.warn('🎭 [DIARIZATION] API ключ DeepGram слишком короткий')
-        console.warn('🎭 [DIARIZATION] Получен ключ длиной:', appConfig.deepgram.apiKey.length)
-        console.warn('🎭 [DIARIZATION] Проверьте правильность API ключа в .env файле')
-        console.warn('🎭 [DIARIZATION] Диаризация недоступна')
         this.deepgram = null
         return
       }
 
       try {
         this.deepgram = createClient(appConfig.deepgram.apiKey)
-        console.log('🎭 [DIARIZATION] DeepGram client created')
         
         // Проверяем, что клиент работает
         if (!this.deepgram || !this.deepgram.listen) {
           throw new Error('DeepGram client is not properly initialized')
         }
         
-        // Пропускаем тест API ключа из-за CORS ограничений
-        console.log('🎭 [DIARIZATION] Skipping API key test due to CORS restrictions')
-        console.log('🎭 [DIARIZATION] API key will be validated during WebSocket connection')
+        console.log('🎤 [DIARIZATION] DeepGram клиент инициализирован')
         
         // Сохраняем API ключ в localStorage для отладки
         if (appConfig.deepgram.apiKey) {
           localStorage.setItem('deepgram_api_key', appConfig.deepgram.apiKey)
-          console.log('🎭 [DIARIZATION] API key saved to localStorage for debugging')
         }
-        
-        console.log('🎭 [DIARIZATION] DeepGram client initialized successfully')
       } catch (clientError) {
-        console.error('🎭 [DIARIZATION] Error creating DeepGram client:', clientError)
         throw clientError
       }
     } catch (error) {
-      console.error('🎭 [DIARIZATION] Failed to initialize DeepGram client:', error)
       this.deepgram = null
       this.handleError(new Error('Не удалось инициализировать DeepGram клиент'))
     }
@@ -90,7 +73,6 @@ export class DiarizationService {
 
   // Подписка на события
   on<K extends keyof DiarizationServiceEvents>(event: K, callback: DiarizationServiceEvents[K]): void {
-    console.log('🎭 [DIARIZATION] 📡 Subscribing to event:', event)
     this.eventListeners[event] = callback
   }
 
@@ -101,21 +83,32 @@ export class DiarizationService {
 
   // Эмит событий
   private emit<K extends keyof DiarizationServiceEvents>(event: K, data: Parameters<DiarizationServiceEvents[K]>[0]): void {
-    console.log('🎭 [DIARIZATION] 📡 Emitting event:', event, 'with data:', data)
     const callback = this.eventListeners[event]
     if (callback) {
-      console.log('🎭 [DIARIZATION] 📡 ✅ Event callback found, executing...')
       callback(data as any)
-    } else {
-      console.log('🎭 [DIARIZATION] 📡 ❌ No callback for event:', event)
-      console.log('🎭 [DIARIZATION] 📡 Available listeners:', Object.keys(this.eventListeners))
     }
   }
 
   // Запуск диаризации
   async start(): Promise<void> {
+    console.log('🎤 [DIARIZATION] Запуск диаризации. Текущее состояние - isActive:', this.isActive, 'isPaused:', this.isPaused, 'isConnecting:', this.isConnecting)
+    
+    // Проверяем, не идет ли уже процесс запуска
+    if (this.isConnecting) {
+      console.log('🎤 [DIARIZATION] Диаризация уже запускается, пропускаем')
+      return
+    }
+
+    // Проверяем, не активна ли уже диаризация
+    if (this.isActive && this.connection) {
+      console.log('🎤 [DIARIZATION] Диаризация уже активна, пропускаем')
+      return
+    }
+    
+    console.log('🎤 [DIARIZATION] Продолжаем запуск диаризации...')
+    
     if (!this.deepgram) {
-      console.warn('🎭 [DIARIZATION] DeepGram клиент не инициализирован - работаем в режиме без диаризации')
+      console.warn('🎤 [DIARIZATION] DeepGram не инициализирован, работаем в режиме эмуляции')
       // Устанавливаем состояние как активное, но без реальной диаризации
       this.isActive = true
       this.isConnecting = false
@@ -124,55 +117,49 @@ export class DiarizationService {
       return
     }
 
-    if (this.isActive && this.connection) {
-      console.warn('🎭 [DIARIZATION] Already active with connection')
-      return
-    }
+    // 🔧 ИСПРАВЛЕНИЕ: Полная очистка состояния перед новым запуском
+    await this.forceCleanup()
 
-    // Если активна, но нет соединения - закрываем старое соединение
-    if (this.isActive && !this.connection) {
-      console.log('🎭 [DIARIZATION] Reconnecting...')
-      this.isActive = false
-    }
+    console.log('🎤 [DIARIZATION] Состояние очищено, создаем новое соединение...')
 
     try {
-      console.log('🎭 [DIARIZATION] Starting diarization...')
       this.isConnecting = true
+      this.isPaused = false // Сбрасываем паузу при новом запуске
       this.error = null
-      this.emit('onStateChange', { isConnecting: true, error: null })
+      this.emit('onStateChange', { isConnecting: true, isPaused: false, error: null })
 
       // Создаем соединение с правильной конфигурацией для русского языка
       const connectionOptions = {
         // Основные параметры
         model: 'nova-2',              // Стабильная модель
-        language: 'ru',               // РУССКИЙ ЯЗЫК (возвращаем)
+        language: 'ru',               // РУССКИЙ ЯЗЫК
         
         // Базовые результаты
         interim_results: true,        // Промежуточные результаты
         
         // Добавляем параметры для лучшего распознавания
         smart_format: true,           // Умное форматирование
-        punctuate: true              // Пунктуация
+        punctuate: true,              // Пунктуация
+        
+        // Параметры для диаризации
+        diarize: true,                // Включаем диаризацию
+        diarize_version: '2023-05-22', // Версия диаризации
+        
+        // Параметры аудио для лучшей совместимости
+        encoding: 'linear16',         // PCM 16-bit
+        sample_rate: 16000,           // 16kHz sample rate
+        channels: 1                   // Моно
       }
-      
-      console.log('🎭 [DIARIZATION] Connection options:', connectionOptions)
-      console.log('🎭 [DIARIZATION] DeepGram client:', this.deepgram)
-      console.log('🎭 [DIARIZATION] API Key length:', appConfig.deepgram.apiKey?.length)
-      console.log('🎭 [DIARIZATION] API Key first 10 chars:', appConfig.deepgram.apiKey?.substring(0, 10))
       
       try {
         this.connection = this.deepgram.listen.live(connectionOptions)
-        console.log('🎭 [DIARIZATION] ✅ Connection created successfully')
       
       // 🔍 КРИТИЧЕСКАЯ ДИАГНОСТИКА: Выставляем connection в window для отладки
       ;(window as any).deepgramConnection = this.connection
       ;(window as any).diarizationService = this
-      console.log('🎭 [DIARIZATION] 🔍 Connection доступен в window.deepgramConnection для отладки!')
-      console.log('🎭 [DIARIZATION] 🔍 Service доступен в window.diarizationService для отладки!')
       
       // 🔍 Добавляем тестовую функцию для отправки тестового аудио
       ;(window as any).testDeepGramAudio = async () => {
-        console.log('🔍 [TEST] Тестируем DeepGram с тестовым аудио...')
         try {
           // Создаем тестовый Blob с синусоидой (имитация звука)
           const sampleRate = 16000
@@ -191,89 +178,86 @@ export class DiarizationService {
           const testBlob2 = new Blob([buffer], { type: 'audio/wav' })
           const testBlob3 = new Blob([buffer], { type: 'audio/raw' })
           
-          console.log('🔍 [TEST] Тестируем audio/pcm...')
           this.connection.send(testBlob1)
           
           setTimeout(() => {
-            console.log('🔍 [TEST] Тестируем audio/wav...')
             this.connection.send(testBlob2)
           }, 2000)
           
           setTimeout(() => {
-            console.log('🔍 [TEST] Тестируем audio/raw...')  
             this.connection.send(testBlob3)
           }, 4000)
-          
-          if (this.connection && this.isActive) {
-            console.log('🔍 [TEST] Все тестовые форматы отправлены!')
-          } else {
-            console.error('🔍 [TEST] Connection не активен!')
-          }
         } catch (error) {
-          console.error('🔍 [TEST] Ошибка тестирования:', error)
+          // Ошибка тестирования
         }
       }
       } catch (error) {
-        console.error('🎭 [DIARIZATION] ❌ Failed to create connection:', error)
         this.handleError(error as Error)
         return
       }
       
-      console.log('🎭 [DIARIZATION] WebSocket connection created, waiting for events...')
-      console.log('🎭 [DIARIZATION] Connection object:', this.connection)
-      
-      // Добавляем таймаут для проверки соединения
-      setTimeout(() => {
-        console.log('🎭 [DIARIZATION] Connection status after 3s:', {
-          isActive: this.isActive,
-          isConnecting: this.isConnecting,
-          hasConnection: !!this.connection,
-          error: this.error
-        })
-        
-        // Если соединение создано, но не активно, принудительно активируем
-        if (this.connection && !this.isActive && !this.error) {
-          console.log('🎭 [DIARIZATION] Forcing activation of diarization...')
-          this.isActive = true
-          this.isConnecting = false
-          this.emit('onStateChange', { isActive: true, isConnecting: false, error: null })
-        }
-      }, 3000)
 
       // Обработчики событий
       this.connection.on(LiveTranscriptionEvents.Open, () => {
-        console.log('🎭 [DIARIZATION] ✅ WebSocket connection opened successfully')
-        console.log('🎭 [DIARIZATION] Connection URL:', this.connection?.getURL?.() || 'Unknown')
+        console.log('🎤 [DIARIZATION] Соединение с DeepGram установлено')
         this.isActive = true
         this.isConnecting = false
+        this.isPaused = false // Убеждаемся, что пауза сброшена
         this.error = null
-        this.emit('onStateChange', { isActive: true, isConnecting: false, error: null })
-        console.log('🎭 [DIARIZATION] Ready to receive audio data')
+        this.emit('onStateChange', { isActive: true, isConnecting: false, isPaused: false, error: null })
         
-        // Отправляем keepalive сообщение для поддержания соединения
+        // 🔧 ИСПРАВЛЕНИЕ: Улучшенный keepalive механизм
         try {
-          console.log('🎭 [DIARIZATION] Sending keepalive message...')
-          this.connection.send(new ArrayBuffer(0)) // Пустое сообщение для keepalive
+          // Отправляем пустой буфер для инициализации соединения
+          const keepaliveBuffer = new ArrayBuffer(0)
+          this.connection.send(keepaliveBuffer)
+          console.log('🎤 [DIARIZATION] Keepalive сообщение отправлено')
+          
+          // Устанавливаем периодический keepalive каждые 30 секунд
+          if (this.keepaliveInterval) {
+            clearInterval(this.keepaliveInterval)
+          }
+          this.keepaliveInterval = setInterval(() => {
+            if (this.connection && this.isActive) {
+              try {
+                this.connection.send(new ArrayBuffer(0))
+                // console.log('🎤 [DIARIZATION] Периодический keepalive отправлен')
+              } catch (error) {
+                console.warn('🎤 [DIARIZATION] Ошибка периодического keepalive:', error)
+              }
+            }
+          }, 30000) // 30 секунд
         } catch (error) {
-          console.warn('🎭 [DIARIZATION] Could not send keepalive:', error)
+          console.warn('🎤 [DIARIZATION] Ошибка отправки keepalive:', error)
         }
       })
 
-      this.connection.on(LiveTranscriptionEvents.Close, () => {
-        console.log('🎭 [DIARIZATION] Connection closed')
+      this.connection.on(LiveTranscriptionEvents.Close, (event: any) => {
+        console.log('🎤 [DIARIZATION] Соединение с DeepGram закрыто. Код:', event?.code, 'Причина:', event?.reason)
+        
+        // 🔧 ИСПРАВЛЕНИЕ: Очищаем keepalive интервал при закрытии
+        if (this.keepaliveInterval) {
+          clearInterval(this.keepaliveInterval)
+          this.keepaliveInterval = null
+          console.log('🎤 [DIARIZATION] Keepalive интервал очищен')
+        }
+        
+        // Просто закрываем соединение без автоматического переподключения
         this.isActive = false
         this.isConnecting = false
+        
         this.emit('onStateChange', { isActive: false, isConnecting: false })
       })
 
       this.connection.on(LiveTranscriptionEvents.Error, (error: any) => {
-        console.error('🎭 [DIARIZATION] ❌ WebSocket connection error:', error)
-        console.error('🎭 [DIARIZATION] Error details:', {
-          message: error.message,
-          readyState: error.readyState,
-          url: error.url,
-          statusCode: error.statusCode
-        })
+        console.error('🎤 [DIARIZATION] Ошибка соединения:', error)
+        
+        // 🔧 ИСПРАВЛЕНИЕ: Очищаем keepalive интервал при ошибке
+        if (this.keepaliveInterval) {
+          clearInterval(this.keepaliveInterval)
+          this.keepaliveInterval = null
+        }
+        
         // Не останавливаем диаризацию при ошибке соединения, пытаемся переподключиться
         this.isConnecting = false
         this.error = `Ошибка соединения: ${error.message || error}`
@@ -281,150 +265,183 @@ export class DiarizationService {
           isConnecting: false, 
           error: this.error 
         })
-        console.warn('🎭 [DIARIZATION] Will attempt to reconnect on next audio data')
       })
 
       this.connection.on(LiveTranscriptionEvents.Transcript, (data: any) => {
-        console.log('🎭 [DIARIZATION] 📝 LiveTranscriptionEvents.Transcript:', data)
-        if (data && data.channel && data.channel.alternatives && data.channel.alternatives[0]) {
-          const transcript = data.channel.alternatives[0].transcript
-          console.log('🎭 [DIARIZATION] 🎯 Raw transcript:', transcript)
-          console.log('🎭 [DIARIZATION] 🎯 Is final:', data.is_final)
-          console.log('🎭 [DIARIZATION] 🎯 Duration:', data.duration)
-        }
         this.handleTranscript(data)
       })
 
       // Добавляем обработку всех возможных событий DeepGram
       this.connection.on('Results', (data: any) => {
-        console.log('🎭 [DIARIZATION] 📝 Results event:', data)
         this.handleTranscript(data)
       })
 
-      this.connection.on('Metadata', (data: any) => {
-        console.log('🎭 [DIARIZATION] 📝 Metadata event:', data)
+      this.connection.on('Metadata', (_data: any) => {
+        // Metadata event
       })
 
-      this.connection.on('UtteranceEnd', (data: any) => {
-        console.log('🎭 [DIARIZATION] 📝 UtteranceEnd event:', data)
+      this.connection.on('UtteranceEnd', (_data: any) => {
+        // UtteranceEnd event
       })
 
-      // Добавляем обработку всех возможных событий
+      // 🔧 ИСПРАВЛЕНИЕ: Добавляем обработку всех возможных событий WebSocket
       this.connection.on('open', () => {
-        console.log('🎭 [DIARIZATION] 🔌 WebSocket open event')
+        console.log('🎤 [DIARIZATION] WebSocket соединение открыто')
       })
 
       this.connection.on('close', (event: any) => {
-        console.log('🎭 [DIARIZATION] 🔌 WebSocket close event:', event)
-      })
-
-      this.connection.on('error', (error: any) => {
-        console.log('🎭 [DIARIZATION] 🔌 WebSocket error event:', error)
-      })
-
-      this.connection.on('message', (data: any) => {
-        console.log('🎭 [DIARIZATION] 🔌 WebSocket message event:', data)
-        try {
-          const parsed = JSON.parse(data)
-          console.log('🎭 [DIARIZATION] 📝 Parsed message:', parsed)
-          
-          // Проверяем есть ли транскрипт в сообщении
-          if (parsed.channel && parsed.channel.alternatives && parsed.channel.alternatives[0]) {
-            const transcript = parsed.channel.alternatives[0].transcript
-            console.log('🎭 [DIARIZATION] 🎯 Found transcript in message:', transcript)
-          }
-        } catch (e) {
-          console.log('🎭 [DIARIZATION] 📝 Raw message (not JSON):', data)
+        console.log('🎤 [DIARIZATION] WebSocket соединение закрыто:', event?.code, event?.reason)
+        
+        // Очищаем keepalive интервал при закрытии WebSocket
+        if (this.keepaliveInterval) {
+          clearInterval(this.keepaliveInterval)
+          this.keepaliveInterval = null
+        }
+        
+        // Если соединение закрылось неожиданно, пытаемся переподключиться
+        if (this.isActive && event?.code !== 1000) { // 1000 = нормальное закрытие
+          console.log('🎤 [DIARIZATION] Неожиданное закрытие соединения, пытаемся переподключиться...')
+          setTimeout(() => {
+            if (this.isActive && !this.connection) {
+              this.start().catch(error => {
+                console.error('🎤 [DIARIZATION] Ошибка автоматического переподключения:', error)
+              })
+            }
+          }, 2000) // Ждем 2 секунды перед переподключением
         }
       })
 
-      console.log('🎭 [DIARIZATION] Diarization started successfully')
+      this.connection.on('error', (error: any) => {
+        console.error('🎤 [DIARIZATION] WebSocket ошибка:', error)
+        
+        // Очищаем keepalive интервал при ошибке WebSocket
+        if (this.keepaliveInterval) {
+          clearInterval(this.keepaliveInterval)
+          this.keepaliveInterval = null
+        }
+      })
+
+      this.connection.on('message', (data: any) => {
+        try {
+          const parsed = JSON.parse(data)
+          
+          // Проверяем есть ли транскрипт в сообщении
+          if (parsed.channel && parsed.channel.alternatives && parsed.channel.alternatives[0]) {
+            // Found transcript in message
+            console.log('🎤 [DIARIZATION] Транскрипт в сообщении найден')
+          }
+        } catch (e) {
+          // Raw message (not JSON)
+        }
+      })
     } catch (error) {
-      console.error('🎭 [DIARIZATION] Failed to start diarization:', error)
       this.handleError(new Error('Не удалось запустить диаризацию'))
     }
   }
 
-  // Остановка диаризации
-  async stop(): Promise<void> {
-    if (!this.isActive) {
-      console.warn('🎭 [DIARIZATION] Not active')
+  // Пауза диаризации (сохраняем соединение)
+  pause(): void {
+    console.log('🎤 [DIARIZATION] Пауза диаризации...')
+    this.isPaused = true
+    this.emit('onStateChange', { isActive: false, isConnecting: false, isPaused: true, error: null })
+    console.log('🎤 [DIARIZATION] Диаризация приостановлена')
+  }
+
+  // Возобновление диаризации
+  async resume(): Promise<void> {
+    console.log('🎤 [DIARIZATION] Возобновление диаризации...')
+    
+    // Проверяем, есть ли активное соединение
+    if (!this.connection) {
+      console.log('🎤 [DIARIZATION] Соединение отсутствует - переподключаемся...')
+      await this.start()
       return
     }
+    
+    this.isPaused = false
+    this.isActive = true
+    this.error = null
+    this.emit('onStateChange', { isActive: true, isConnecting: false, isPaused: false, error: null })
+    console.log('🎤 [DIARIZATION] Диаризация возобновлена')
+  }
 
+  // Остановка диаризации
+  async stop(): Promise<void> {
+    console.log('🎤 [DIARIZATION] Остановка диаризации...')
+    
+    // 🔧 ИСПРАВЛЕНИЕ: Останавливаем даже если не активно (для очистки состояния)
     try {
-      console.log('🎭 [DIARIZATION] Stopping diarization...')
-      
       if (this.connection) {
+        console.log('🎤 [DIARIZATION] Закрываем соединение...')
         await this.connection.finish()
         this.connection = null
       }
 
+      // 🔧 ИСПРАВЛЕНИЕ: Принудительно сбрасываем все состояния
       this.isActive = false
       this.isConnecting = false
-      this.emit('onStateChange', { isActive: false, isConnecting: false })
+      this.isPaused = false // Сбрасываем паузу
+      this.error = null
       
-      console.log('🎭 [DIARIZATION] Diarization stopped')
+      // 🔧 ИСПРАВЛЕНИЕ: Очищаем keepalive интервал
+      if (this.keepaliveInterval) {
+        clearInterval(this.keepaliveInterval)
+        this.keepaliveInterval = null
+        console.log('🎤 [DIARIZATION] Keepalive интервал очищен при остановке')
+      }
+      
+      // Очищаем активные сегменты и спикеров при остановке
+      this.activeSegments = {}
+      this.currentSpeakerId = null
+      this.currentSpeakerName = null
+      this.lastSegmentTime = null
+      
+      this.emit('onStateChange', { isActive: false, isConnecting: false, error: null })
+      console.log('🎤 [DIARIZATION] Диаризация остановлена и состояние очищено')
     } catch (error) {
-      console.error('🎭 [DIARIZATION] Error stopping diarization:', error)
-      this.handleError(new Error('Ошибка при остановке диаризации'))
+      console.error('🎤 [DIARIZATION] Ошибка при остановке:', error)
+      
+      // 🔧 ИСПРАВЛЕНИЕ: Даже при ошибке сбрасываем состояния
+      this.isActive = false
+      this.isConnecting = false
+      this.isPaused = false
+      this.connection = null
+      this.error = error instanceof Error ? error.message : 'Ошибка остановки'
+      
+      this.emit('onStateChange', { 
+        isActive: false, 
+        isConnecting: false, 
+        error: this.error 
+      })
     }
   }
 
   // Обработка транскрипции
   private handleTranscript(data: any): void {
     try {
-      console.log('🎭 [DIARIZATION] 📝 Received transcript data:', data)
-      
       if (!data.channel?.alternatives?.[0]) {
-        console.log('🎭 [DIARIZATION] No alternatives in transcript data')
         return
       }
 
       const alternative = data.channel.alternatives[0]
       const text = alternative.transcript?.trim()
       
-      console.log('🎭 [DIARIZATION] Transcript text:', text)
-      console.log('🎭 [DIARIZATION] Alternative data:', alternative)
-      console.log('🎭 [DIARIZATION] Channel data:', data.channel)
-      
       if (!text) {
-        console.log('🎭 [DIARIZATION] ❌ Empty transcript text')
-        console.log('🎭 [DIARIZATION] 📊 Data structure:', {
-          type: data.type,
-          channel_index: data.channel_index,
-          duration: data.duration,
-          start: data.start,
-          is_final: data.is_final
-        })
-        console.log('🎭 [DIARIZATION] 🎯 Alternative data:', {
-          transcript: alternative.transcript,
-          confidence: alternative.confidence,
-          words_count: alternative.words?.length || 0,
-          has_words: !!alternative.words
-        })
-        if (alternative.words && alternative.words.length > 0) {
-          console.log('🎭 [DIARIZATION] 🔤 First few words:', alternative.words.slice(0, 3))
-        }
         return
       }
-      
-      console.log('🎭 [DIARIZATION] ✅ Got transcript text:', text)
 
       // Получаем информацию о спикере
       const speaker = alternative.words?.[0]?.speaker
       const confidence = alternative.confidence || 0
       const isFinal = alternative.words?.[0]?.is_final || false
 
-      console.log('🎭 [DIARIZATION] Speaker info:', { speaker, confidence, isFinal })
+      // Логируем результат распознавания
+      console.log(`🎤 [DIARIZATION] Распознано: "${text}" (уверенность: ${(confidence * 100).toFixed(1)}%, финальное: ${isFinal})`)
 
       if (speaker !== undefined) {
         const segment = this.createSegment(speaker, text, isFinal, confidence)
-        console.log('🎭 [DIARIZATION] Created segment:', segment)
         this.emit('onSegment', segment)
       } else {
-        console.log('🎭 [DIARIZATION] No speaker info, creating basic segment')
-        
         // 🔧 ВРЕМЕННАЯ ЛОГИКА: Создаем разных спикеров по паузам
         const currentTime = Date.now()
         const SPEAKER_CHANGE_TIMEOUT = 5000 // 5 секунд для смены спикера
@@ -437,7 +454,7 @@ export class DiarizationService {
           // Смена спикера после паузы
           speakerId = speakerId === 'speaker_1' ? 'speaker_2' : 'speaker_1'
           speakerName = speakerId === 'speaker_1' ? 'Спикер 1' : 'Спикер 2'
-          console.log('🎭 [DIARIZATION] 🔄 Speaker changed to:', speakerName)
+          console.log(`🎤 [DIARIZATION] Смена спикера: ${speakerName}`)
         }
         
         this.currentSpeakerId = speakerId
@@ -456,7 +473,7 @@ export class DiarizationService {
         this.emit('onSegment', basicSegment)
       }
     } catch (error) {
-      console.error('🎭 [DIARIZATION] Error handling transcript:', error)
+      console.error('🎤 [DIARIZATION] Ошибка обработки транскрипции:', error)
     }
   }
 
@@ -501,6 +518,7 @@ export class DiarizationService {
     const color = appConfig.diarization.speakerColors[colorIndex]
     const displayName = `Спикер ${speakerId + 1}`
     
+    console.log(`🎤 [DIARIZATION] Новый спикер: ${displayName} (цвет: ${color})`)
     this.speakerCounter++
 
     return {
@@ -514,65 +532,88 @@ export class DiarizationService {
   // Отправка аудио данных
   // 🎯 ИСПРАВЛЕНИЕ: Принимаем Blob согласно официальной документации DeepGram
   async sendAudio(audioBlob: Blob): Promise<void> {
-    console.log('🎭 [DIARIZATION] sendAudio called, state:', {
-      isActive: this.isActive,
-      isConnecting: this.isConnecting,
-      hasConnection: !!this.connection,
-      hasDeepgram: !!this.deepgram,
-      error: this.error
-    })
-    
+    // 🔧 ИСПРАВЛЕНИЕ: Добавляем детальную диагностику состояния
     if (!this.isActive) {
-      console.warn('🎭 [DIARIZATION] Diarization not active - cannot send audio')
+      console.warn('🎤 [DIARIZATION] Попытка отправки аудио при неактивной диаризации - игнорируем')
+      return
+    }
+
+    // Проверяем состояние паузы
+    if (this.isPaused) {
+      console.log('🎤 [DIARIZATION] Диаризация на паузе - игнорируем аудио. isPaused:', this.isPaused, 'isActive:', this.isActive)
+      return
+    }
+
+    // Дополнительная проверка - если соединение закрыто, не отправляем
+    if (!this.connection) {
+      console.warn('🎤 [DIARIZATION] Соединение закрыто - не отправляем аудио')
       return
     }
 
     // Если DeepGram не инициализирован, просто логируем
     if (!this.deepgram) {
-      console.log('🎭 [DIARIZATION] DeepGram not available - audio data received but not processed')
+      console.warn('🎤 [DIARIZATION] DeepGram не инициализирован')
       return
     }
 
-    // Если соединение потеряно, пытаемся переподключиться
+    // 🔧 ИСПРАВЛЕНИЕ: Если соединение потеряно, пытаемся переподключиться
     if (!this.connection) {
-      console.log('🎭 [DIARIZATION] Connection lost, attempting to reconnect...')
+      console.warn('🎤 [DIARIZATION] Соединение потеряно, пытаемся переподключиться...')
       try {
         await this.start()
         if (this.connection) {
-          console.log('🎭 [DIARIZATION] Reconnected successfully')
+          console.log('🎤 [DIARIZATION] Переподключение успешно')
+        } else {
+          console.error('🎤 [DIARIZATION] Не удалось создать соединение при переподключении')
+          return
         }
       } catch (error) {
-        console.error('🎭 [DIARIZATION] Failed to reconnect:', error)
+        console.error('🎤 [DIARIZATION] Ошибка переподключения:', error)
         return
       }
     }
 
     try {
-      console.log('🎭 [DIARIZATION] 🎵 Sending audio Blob, size:', audioBlob.size, 'bytes, type:', audioBlob.type)
-      console.log('🎭 [DIARIZATION] 🔍 Connection state before send:', {
-        readyState: this.connection.getReadyState?.(),
-        isActive: this.isActive,
-        isConnecting: this.isConnecting
-      })
+      // 🔧 ИСПРАВЛЕНИЕ: Проверяем что соединение готово к отправке
+      if (!this.connection || typeof this.connection.send !== 'function') {
+        console.error('🎤 [DIARIZATION] Соединение не готово для отправки данных')
+        return
+      }
+
+      // 🔧 ИСПРАВЛЕНИЕ: Обрабатываем PCM и WebM данные по-разному
+      let audioData: ArrayBuffer | Blob = audioBlob
       
-      // Отправляем Blob напрямую как в официальном примере: connection.send(event.data)
-      this.connection.send(audioBlob)
-      console.log('🎭 [DIARIZATION] ✅ Audio Blob sent successfully')
-      
-      // 🔍 ДИАГНОСТИКА: Проверяем состояние после отправки
-      console.log('🎭 [DIARIZATION] 🔍 Connection state after send:', {
-        readyState: this.connection.getReadyState?.(),
-        isActive: this.isActive
-      })
+      if (audioBlob.type === 'audio/pcm') {
+        // PCM данные уже готовы для DeepGram
+        audioData = await audioBlob.arrayBuffer()
+        // console.log(`🎤 [DIARIZATION] PCM данные готовы (размер: ${audioData.byteLength} байт)`)
+      } else if (audioBlob.type.includes('webm')) {
+        try {
+          // Читаем WebM как ArrayBuffer
+          audioData = await audioBlob.arrayBuffer()
+          // console.log(`🎤 [DIARIZATION] Конвертирован WebM в ArrayBuffer (размер: ${audioData.byteLength} байт)`)
+        } catch (conversionError) {
+          console.warn('🎤 [DIARIZATION] Ошибка конвертации WebM, отправляем как Blob:', conversionError)
+          audioData = audioBlob
+        }
+      }
+
+      // Отправляем данные
+      this.connection.send(audioData)
+      // console.log(`🎤 [DIARIZATION] Аудио отправлено (размер: ${audioData instanceof ArrayBuffer ? audioData.byteLength : audioData.size} байт, тип: ${audioBlob.type})`)
     } catch (error) {
-      console.error('🎭 [DIARIZATION] ❌ Error sending audio:', error)
-      // Не останавливаем диаризацию при ошибке отправки
-      console.warn('🎭 [DIARIZATION] Will retry on next audio data')
+      console.error('🎤 [DIARIZATION] Ошибка отправки аудио:', error)
+      // При критической ошибке отправки пытаемся переподключиться
+      if (error instanceof Error && error.message.includes('WebSocket')) {
+        console.log('🎤 [DIARIZATION] Ошибка WebSocket, пытаемся переподключиться...')
+        this.connection = null
+      }
     }
   }
 
   // Обработка ошибок
   private handleError(error: Error): void {
+    console.error('🎤 [DIARIZATION] Критическая ошибка:', error.message)
     this.error = error.message
     this.isActive = false
     this.isConnecting = false
@@ -589,18 +630,63 @@ export class DiarizationService {
     return {
       isActive: this.isActive,
       isConnecting: this.isConnecting,
+      isPaused: this.isPaused,
       error: this.error,
       speakers: { ...this.speakers },
       activeSegments: { ...this.activeSegments }
     }
   }
 
+  // Принудительная очистка состояния
+  private async forceCleanup(): Promise<void> {
+    console.log('🎤 [DIARIZATION] Принудительная очистка состояния...')
+    
+    // Сначала сбрасываем состояния, чтобы остановить все процессы
+    this.isActive = false
+    this.isConnecting = false
+    this.error = null
+
+    // Очищаем keepalive интервал
+    if (this.keepaliveInterval) {
+      clearInterval(this.keepaliveInterval)
+      this.keepaliveInterval = null
+    }
+
+    // Закрываем соединение если есть
+    if (this.connection) {
+      try {
+        await this.connection.finish()
+      } catch (error) {
+        console.warn('🎤 [DIARIZATION] Ошибка при закрытии соединения:', error)
+      }
+      this.connection = null
+    }
+
+    // Очищаем данные
+    this.activeSegments = {}
+    this.currentSpeakerId = null
+    this.currentSpeakerName = null
+    this.lastSegmentTime = null
+    
+    // Небольшая задержка для очистки ресурсов
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
+    console.log('🎤 [DIARIZATION] Состояние принудительно очищено')
+  }
+
   // Очистка ресурсов
   cleanup(): void {
-    console.log('🎭 [DIARIZATION] Cleaning up...')
+    console.log('🎤 [DIARIZATION] Очистка ресурсов...')
+    
+    // 🔧 ИСПРАВЛЕНИЕ: Очищаем keepalive интервал
+    if (this.keepaliveInterval) {
+      clearInterval(this.keepaliveInterval)
+      this.keepaliveInterval = null
+      console.log('🎤 [DIARIZATION] Keepalive интервал очищен при cleanup')
+    }
     
     if (this.connection) {
-      this.connection.finish().catch(console.error)
+      this.connection.finish().catch(() => {})
       this.connection = null
     }
 
@@ -611,6 +697,13 @@ export class DiarizationService {
     this.activeSegments = {}
     this.speakerCounter = 0
     this.eventListeners = {}
+    
+    // Очищаем временную логику спикеров
+    this.currentSpeakerId = null
+    this.currentSpeakerName = null
+    this.lastSegmentTime = null
+    
+    console.log('🎤 [DIARIZATION] Ресурсы очищены')
   }
 }
 

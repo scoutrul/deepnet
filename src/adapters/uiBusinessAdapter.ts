@@ -5,6 +5,10 @@ import { useContextStore } from '../stores/contextStore'
 import { useChatStore } from '../stores/chatStore'
 import { useUiStore } from '../stores/uiStore'
 import { diarizationService } from '../services/voice/diarizationService'
+import { systemAudioService } from '../services/voice/systemAudioService'
+import type { SystemAudioError } from '../services/voice/systemAudioService'
+import { audioMixerService } from '../services/voice/audioMixerService'
+import type { AudioMixerError, AudioMixerState } from '../services/voice/audioMixerService'
 
 // Адаптер для связи UI и Business слоев
 export class UIBusinessAdapter implements UIBusinessInterface {
@@ -14,7 +18,7 @@ export class UIBusinessAdapter implements UIBusinessInterface {
   private uiStore: any | null = null
   
   constructor() {
-    console.log('🔗 [ADAPTER] UI-Business adapter initialized')
+    // UI-Business adapter initialized
   }
   
   private getVoiceStore() {
@@ -49,8 +53,6 @@ export class UIBusinessAdapter implements UIBusinessInterface {
   
   async initializeServices(): Promise<void> {
     try {
-      console.log('🔗 [ADAPTER] Initializing services...')
-      
       // Инициализируем UI store
       this.getUiStore().actions.initialize()
       
@@ -62,10 +64,7 @@ export class UIBusinessAdapter implements UIBusinessInterface {
       
       // Инициализируем chat store
       await this.getChatStore().actions.initialize()
-      
-      console.log('🔗 [ADAPTER] All services initialized')
     } catch (error) {
-      console.error('🔗 [ADAPTER] Error initializing services:', error)
       this.getUiStore().actions.showError('Ошибка инициализации сервисов')
       throw error
     }
@@ -75,8 +74,6 @@ export class UIBusinessAdapter implements UIBusinessInterface {
   
   async executeAction(action: string, data?: any): Promise<any> {
     try {
-      console.log('🔗 [ADAPTER] Executing action:', action, data)
-      
       switch (action) {
         case 'voice.startRecording':
           return await this.getVoiceStore().actions.startRecording()
@@ -114,11 +111,25 @@ export class UIBusinessAdapter implements UIBusinessInterface {
         case 'ui.showNotification':
           return this.getUiStore().actions.addNotification(data)
           
+        case 'systemAudio.start':
+          return await this.startSystemAudioCapture()
+          
+        case 'systemAudio.stop':
+          return this.stopSystemAudioCapture()
+          
+        case 'audioMixer.start':
+          return await this.startAudioMixing()
+          
+        case 'audioMixer.stop':
+          return this.stopAudioMixing()
+          
+        case 'audioMixer.testSystemAudio':
+          return await this.testSystemAudio()
+          
         default:
           throw new Error(`Unknown action: ${action}`)
       }
     } catch (error) {
-      console.error('🔗 [ADAPTER] Error executing action:', action, error)
       this.getUiStore().actions.showError(`Ошибка выполнения действия: ${action}`)
       throw error
     }
@@ -128,8 +139,6 @@ export class UIBusinessAdapter implements UIBusinessInterface {
   
   getData(key: string): any {
     try {
-      console.log('🔗 [ADAPTER] Getting data:', key)
-      
       switch (key) {
         case 'voice.state':
           return this.getVoiceStore().getters
@@ -164,12 +173,34 @@ export class UIBusinessAdapter implements UIBusinessInterface {
         case 'ui.notifications':
           return this.getUiStore().getters.notifications
           
+        case 'systemAudio.isSupported':
+          return systemAudioService.isSupported()
+          
+        case 'systemAudio.isCapturing':
+          return systemAudioService.isCapturing()
+          
+        case 'systemAudio.state':
+          return systemAudioService.getState()
+          
+        case 'audioMixer.isActive':
+          return audioMixerService.getState().isActive
+          
+        case 'audioMixer.state':
+          return audioMixerService.getState()
+          
+        case 'audioMixer.microphoneActive':
+          return audioMixerService.isMicrophoneActive()
+          
+        case 'audioMixer.systemAudioActive':
+          return audioMixerService.isSystemAudioActive()
+          
+        case 'audioMixer.macOSPermissions':
+          return audioMixerService.checkMacOSPermissions()
+          
         default:
-          console.warn('🔗 [ADAPTER] Unknown data key:', key)
           return null
       }
     } catch (error) {
-      console.error('🔗 [ADAPTER] Error getting data:', key, error)
       return null
     }
   }
@@ -178,8 +209,6 @@ export class UIBusinessAdapter implements UIBusinessInterface {
   
   updateData(key: string, value: any): void {
     try {
-      console.log('🔗 [ADAPTER] Updating data:', key, value)
-      
       switch (key) {
         case 'voice.settings':
           this.getVoiceStore().actions.updateSettings(value)
@@ -200,12 +229,8 @@ export class UIBusinessAdapter implements UIBusinessInterface {
         case 'ui.sidebarOpen':
           this.getUiStore().actions.setSidebarOpen(value)
           break
-          
-        default:
-          console.warn('🔗 [ADAPTER] Unknown update key:', key)
       }
     } catch (error) {
-      console.error('🔗 [ADAPTER] Error updating data:', key, error)
       this.getUiStore().actions.showError(`Ошибка обновления данных: ${key}`)
     }
   }
@@ -214,8 +239,6 @@ export class UIBusinessAdapter implements UIBusinessInterface {
   
   subscribe(key: string, callback: (data: any) => void): () => void {
     try {
-      console.log('🔗 [ADAPTER] Subscribing to:', key)
-      
       switch (key) {
         case 'voice.state':
           return this.getVoiceStore().actions.subscribe(callback)
@@ -230,11 +253,9 @@ export class UIBusinessAdapter implements UIBusinessInterface {
           return this.getUiStore().actions.subscribe(callback)
           
         default:
-          console.warn('🔗 [ADAPTER] Unknown subscription key:', key)
           return () => {}
       }
     } catch (error) {
-      console.error('🔗 [ADAPTER] Error subscribing to:', key, error)
       return () => {}
     }
   }
@@ -244,49 +265,71 @@ export class UIBusinessAdapter implements UIBusinessInterface {
   // Запуск диаризации
   async startDiarization(): Promise<void> {
     try {
-      console.log('🎭 [ADAPTER] Starting diarization...')
-      
+      console.log('🎭 [ADAPTER] Запуск диаризации...')
+
       // Подписываемся на события диаризации
       diarizationService.on('onSegment', (segment) => {
         this.getChatStore().actions.appendDiarizedSegment(segment)
       })
-      
+
       diarizationService.on('onSpeakerChange', (speaker) => {
+        console.log('🎭 [ADAPTER] Новый спикер обнаружен:', speaker.displayName)
         this.getChatStore().actions.addSpeaker(speaker)
       })
-      
+
       diarizationService.on('onStateChange', (state) => {
         this.getChatStore().actions.updateDiarizationState(state)
       })
-      
+
       diarizationService.on('onError', (error) => {
-        console.error('🎭 [ADAPTER] Diarization error:', error)
-        this.getChatStore().actions.updateDiarizationState({ 
-          isActive: false, 
-          isConnecting: false, 
-          error: error.message 
+        console.error('🎭 [ADAPTER] Ошибка диаризации:', error.message)
+        this.getChatStore().actions.updateDiarizationState({
+          isActive: false,
+          isConnecting: false,
+          error: error.message
         })
       })
-      
-      // Запускаем диаризацию
+
+      // Запускаем диаризацию (параллельно с аудио)
       await diarizationService.start()
-      
-      console.log('🎭 [ADAPTER] Diarization started successfully')
+
+      console.log('🎭 [ADAPTER] Диаризация запущена успешно')
     } catch (error) {
-      console.error('🎭 [ADAPTER] Error starting diarization:', error)
-      this.getChatStore().actions.updateDiarizationState({ 
-        isActive: false, 
-        isConnecting: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      console.error('🎭 [ADAPTER] Ошибка запуска диаризации:', error)
+      this.getChatStore().actions.updateDiarizationState({
+        isActive: false,
+        isConnecting: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       })
+    }
+  }
+
+  // Пауза диаризации (без закрытия соединения)
+  pauseDiarization(): void {
+    console.log('🎭 [ADAPTER] Пауза диаризации...')
+    try {
+      diarizationService.pause()
+      console.log('🎭 [ADAPTER] Диаризация приостановлена')
+    } catch (error) {
+      console.error('🎭 [ADAPTER] Ошибка паузы диаризации:', error)
+    }
+  }
+
+  // Возобновление диаризации
+  async resumeDiarization(): Promise<void> {
+    console.log('🎭 [ADAPTER] Возобновление диаризации...')
+    try {
+      await diarizationService.resume()
+      console.log('🎭 [ADAPTER] Диаризация возобновлена')
+    } catch (error) {
+      console.error('🎭 [ADAPTER] Ошибка возобновления диаризации:', error)
     }
   }
 
   // Остановка диаризации
   async stopDiarization(): Promise<void> {
     try {
-      console.log('🎭 [ADAPTER] Stopping diarization...')
-      
+      console.log('🎭 [ADAPTER] Остановка диаризации...')
       await diarizationService.stop()
       
       // Отписываемся от событий
@@ -294,10 +337,9 @@ export class UIBusinessAdapter implements UIBusinessInterface {
       diarizationService.off('onSpeakerChange')
       diarizationService.off('onStateChange')
       diarizationService.off('onError')
-      
-      console.log('🎭 [ADAPTER] Diarization stopped successfully')
+      console.log('🎭 [ADAPTER] Диаризация остановлена')
     } catch (error) {
-      console.error('🎭 [ADAPTER] Error stopping diarization:', error)
+      console.error('🎭 [ADAPTER] Ошибка остановки диаризации:', error)
     }
   }
 
@@ -305,15 +347,162 @@ export class UIBusinessAdapter implements UIBusinessInterface {
   // 🎯 ИСПРАВЛЕНИЕ: Принимаем Blob согласно официальной документации DeepGram
   async sendAudioToDiarization(audioBlob: Blob): Promise<void> {
     try {
+      // Проверяем что диаризация активна или подключается перед отправкой
+      const diarizationState = diarizationService.getState()
+      if (!diarizationState.isActive && !diarizationState.isConnecting) {
+        console.warn('🎭 [ADAPTER] Диаризация неактивна и не подключается - не отправляем аудио')
+        return
+      }
+      
+
       await diarizationService.sendAudio(audioBlob)
     } catch (error) {
-      console.error('🎭 [ADAPTER] Error sending audio to diarization:', error)
+      console.error('🎭 [ADAPTER] Ошибка отправки аудио в диаризацию:', error)
     }
   }
 
   // Получение состояния диаризации
   getDiarizationState() {
     return this.getChatStore().getters.diarizationState()
+  }
+
+  // ==================== СИСТЕМНЫЙ ЗВУК ====================
+
+  // Запуск захвата системного звука
+  async startSystemAudioCapture(): Promise<void> {
+    try {
+      console.log('🔊 [ADAPTER] Запуск захвата системного звука...')
+      
+      // Подписываемся на события системного аудио
+      systemAudioService.onAudioData((audioBlob) => {
+        // Отправляем аудио данные в диаризацию
+        this.sendAudioToDiarization(audioBlob)
+      })
+      
+      systemAudioService.onError((error: SystemAudioError) => {
+        console.error('🔊 [ADAPTER] Ошибка системного звука:', error.message)
+        this.getUiStore().actions.showError(`Ошибка системного звука: ${error.message}`)
+        
+        // Если это критическая ошибка доступа, можно предложить fallback на микрофон
+        if (error.type === 'permission' || error.type === 'not_supported') {
+          console.log('🔊 [ADAPTER] Предлагаем fallback на микрофон')
+          // Эмитируем событие для UI о необходимости переключения на микрофон
+          this.getUiStore().actions.addNotification({
+            type: 'warning',
+            message: 'Системный звук недоступен. Переключитесь на микрофон для продолжения записи.',
+            action: 'switchToMicrophone'
+          })
+        }
+      })
+      
+      systemAudioService.onStateChange((isCapturing) => {
+        console.log(`🔊 [ADAPTER] Состояние захвата системного звука: ${isCapturing}`)
+      })
+      
+      // Запускаем захват
+      await systemAudioService.startSystemAudioCapture()
+      console.log('🔊 [ADAPTER] Захват системного звука запущен успешно')
+    } catch (error) {
+      console.error('🔊 [ADAPTER] Ошибка запуска захвата системного звука:', error)
+      throw error
+    }
+  }
+
+  // Остановка захвата системного звука
+  stopSystemAudioCapture(): void {
+    try {
+      console.log('🔊 [ADAPTER] Остановка захвата системного звука...')
+      systemAudioService.stopSystemAudioCapture()
+      console.log('🔊 [ADAPTER] Захват системного звука остановлен')
+    } catch (error) {
+      console.error('🔊 [ADAPTER] Ошибка остановки захвата системного звука:', error)
+    }
+  }
+
+  // Проверка поддержки системного звука
+  isSystemAudioSupported(): boolean {
+    return systemAudioService.isSupported()
+  }
+
+  // Получение состояния системного звука
+  getSystemAudioState() {
+    return systemAudioService.getState()
+  }
+
+  // ==================== АУДИО МИКШЕР ====================
+
+  // Запуск микширования аудио (микрофон + системный звук)
+  async startAudioMixing(): Promise<void> {
+    try {
+      console.log('🎧 [ADAPTER] Запуск микширования аудио...')
+      
+      // Инициализируем микшер если нужно
+      await audioMixerService.initialize()
+      
+      // Подписываемся на события микшера
+      audioMixerService.onAudioData((audioBlob) => {
+        // Отправляем смешанные аудио данные в диаризацию
+        this.sendAudioToDiarization(audioBlob)
+      })
+      
+      audioMixerService.onError((error: AudioMixerError) => {
+        console.error('🎧 [ADAPTER] Ошибка микшера:', error.message)
+        this.getUiStore().actions.showError(`Ошибка аудио микшера: ${error.message}`)
+      })
+      
+      audioMixerService.onStateChange((state: AudioMixerState) => {
+        console.log('🎧 [ADAPTER] Состояние микшера изменилось:', {
+          isActive: state.isActive,
+          microphone: state.microphone.isActive,
+          systemAudio: state.systemAudio.isActive
+        })
+      })
+      
+      // Запускаем микширование
+      await audioMixerService.startMixing()
+      console.log('🎧 [ADAPTER] Микширование аудио запущено успешно')
+    } catch (error) {
+      console.error('🎧 [ADAPTER] Ошибка запуска микширования:', error)
+      throw error
+    }
+  }
+
+  // Остановка микширования аудио
+  stopAudioMixing(): void {
+    try {
+      console.log('🎧 [ADAPTER] Остановка микширования аудио...')
+      audioMixerService.stopMixing()
+      console.log('🎧 [ADAPTER] Микширование аудио остановлено')
+    } catch (error) {
+      console.error('🎧 [ADAPTER] Ошибка остановки микширования:', error)
+    }
+  }
+
+  // Получение состояния микшера
+  getAudioMixerState(): AudioMixerState {
+    return audioMixerService.getState()
+  }
+
+  // Тестирование системного звука
+  async testSystemAudio(): Promise<any> {
+    try {
+      console.log('🎧 [ADAPTER] Тестирование системного звука...')
+      const result = await audioMixerService.testSystemAudio()
+      
+      if (result.needsPermission) {
+        const permissions = audioMixerService.checkMacOSPermissions()
+        this.getUiStore().actions.showError(
+          `Требуются разрешения macOS для системного звука:\n\n${permissions.instructions}`
+        )
+      } else if (!result.supported) {
+        this.getUiStore().actions.showError(`Системный звук недоступен: ${result.error}`)
+      }
+      
+      return result
+    } catch (error) {
+      console.error('🎧 [ADAPTER] Ошибка тестирования системного звука:', error)
+      throw error
+    }
   }
   
   // ==================== ОЧИСТКА РЕСУРСОВ ====================
@@ -324,6 +513,16 @@ export class UIBusinessAdapter implements UIBusinessInterface {
       
       // Останавливаем диаризацию
       this.stopDiarization()
+      
+      // Останавливаем системный звук
+      this.stopSystemAudioCapture()
+      
+      // Останавливаем микширование
+      this.stopAudioMixing()
+      
+      // Очищаем сервисы
+      systemAudioService.cleanup()
+      audioMixerService.cleanup()
       
       // Очищаем stores
       this.getVoiceStore().actions.cleanup()
@@ -344,4 +543,4 @@ export const uiBusinessAdapter = new UIBusinessAdapter()
 // Экспортируем для использования в компонентах
 export default uiBusinessAdapter
 
-console.log('🔗 [ADAPTER] UI-Business adapter created')
+// UI-Business adapter created

@@ -46,6 +46,7 @@ export interface DiarizedMessage {
 export interface DiarizationState {
 	isActive: boolean
 	isConnecting: boolean
+	isPaused: boolean // Состояние паузы
 	error: string | null
 	speakers: Record<string, DiarizedSpeaker>
 	activeSegments: Record<string, DiarizedSegment>
