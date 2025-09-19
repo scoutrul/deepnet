@@ -179,6 +179,39 @@
           </div>
         </div>
 
+        <!-- Interview Hints Panel -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div class="px-6 py-4 border-b border-slate-200">
+            <h2 class="text-lg font-semibold text-gray-800">Подсказки для интервью</h2>
+          </div>
+          <div class="px-6 py-4">
+            <InterviewHintsPanel 
+              ref="interviewHintsPanel"
+              :hints="interviewHints"
+              :context="interviewContext"
+              :is-loading="isGeneratingHints"
+              :is-form-valid="isInterviewFormValid"
+              @generate-hints="onGenerateHints"
+              @hint-selected="onHintSelected"
+              @add-to-chat="onAddHintToChat"
+            />
+          </div>
+        </div>
+
+        <!-- Interview Context Panel -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div class="px-6 py-4 border-b border-slate-200">
+            <h2 class="text-lg font-semibold text-gray-800">Контекст интервью</h2>
+          </div>
+          <div class="px-6 py-4">
+            <ContextInputPanel 
+              ref="contextInputPanel"
+              @form-validation-changed="onFormValidationChanged"
+            />
+          </div>
+        </div>
+
+
         <!-- Search Panel -->
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
           <div class="px-6 py-4 border-b border-slate-200">
@@ -223,7 +256,11 @@ import ChatInput from './chat/ChatInput.vue'
 import ContextPanel from './context/ContextPanel.vue'
 import HintPanel from './context/HintPanel.vue'
 import SearchPanel from './context/SearchPanel.vue'
+import ContextInputPanel from './interview/ContextInputPanel.vue'
+import InterviewHintsPanel from './interview/InterviewHintsPanel.vue'
 import { uiBusinessAdapter } from '../adapters'
+import { hintGeneratorService } from '../services/interview/hintGeneratorService'
+import { interviewContextService } from '../services/interview/interviewContextService'
 // Используем адаптер для связи с сервисами
 
 export default {
@@ -234,7 +271,9 @@ export default {
     ChatInput,
     ContextPanel,
     HintPanel,
-    SearchPanel
+    SearchPanel,
+    ContextInputPanel,
+    InterviewHintsPanel
   },
   data() {
     return {
@@ -256,7 +295,13 @@ export default {
       audioBuffer: [], // Буфер для аудио данных до подключения DeepGram
       
       // Состояние микшера
-      audioMixerState: null
+      audioMixerState: null,
+      
+      // Состояние интервью
+      interviewHints: [],
+      interviewContext: null,
+      isGeneratingHints: false,
+      isInterviewFormValid: false
     }
   },
   computed: {
@@ -299,6 +344,7 @@ export default {
       return apiKey && apiKey.length >= 10
     },
 
+
     // Состояние микшера
     isMicrophoneActive() {
       return this.audioMixerState?.microphone?.isActive || false
@@ -324,6 +370,10 @@ export default {
     await this.initializeApp()
     // Получаем начальное состояние микшера
     this.audioMixerState = this.adapter.getData('audioMixer.state')
+    // Обновляем валидацию формы после монтирования
+    this.$nextTick(() => {
+      this.updateFormValidation()
+    })
   },
   beforeDestroy() {
     this.cleanup()
@@ -866,6 +916,87 @@ export default {
       } finally {
         this.loading = false
       }
+    },
+
+    // ==================== ИНТЕРВЬЮ МЕТОДЫ ====================
+
+    // Обработка генерации подсказок
+    async onHintsGenerated(context) {
+      try {
+        this.isGeneratingHints = true
+        this.interviewContext = context
+        
+        // Генерируем подсказки через сервис
+        const hints = await hintGeneratorService.generateTopHints(context)
+        this.interviewHints = hints
+        
+        console.log('Сгенерированы подсказки для интервью:', hints.length)
+      } catch (error) {
+        console.error('Ошибка генерации подсказок:', error)
+        this.addMessage({
+          id: Date.now().toString(),
+          text: `Ошибка генерации подсказок: ${error.message}`,
+          content: `Ошибка генерации подсказок: ${error.message}`,
+          role: 'assistant',
+          isUser: false,
+          error: true,
+          timestamp: Date.now()
+        })
+      } finally {
+        this.isGeneratingHints = false
+      }
+    },
+
+    // Обработка запроса на генерацию подсказок
+    async onGenerateHints() {
+      try {
+        // Получаем контекст из ContextInputPanel
+        const contextInputPanel = this.$refs.contextInputPanel
+        if (!contextInputPanel) {
+          console.warn('ContextInputPanel не найден')
+          return
+        }
+
+        const context = contextInputPanel.formData
+        if (!context) {
+          console.warn('Контекст интервью не заполнен')
+          return
+        }
+
+        // Проверяем валидность контекста
+        if (!interviewContextService.validateContext(context)) {
+          console.warn('Контекст интервью невалиден')
+          return
+        }
+
+        await this.onHintsGenerated(context)
+      } catch (error) {
+        console.error('Ошибка при получении контекста:', error)
+      }
+    },
+
+    // Обновление валидации формы
+    updateFormValidation() {
+      const contextPanel = this.$refs.contextInputPanel
+      if (contextPanel) {
+        this.isInterviewFormValid = contextPanel.isFormValid
+      }
+    },
+
+    // Обработка изменения валидации формы
+    onFormValidationChanged(isValid) {
+      this.isInterviewFormValid = isValid
+    },
+
+    // Обработка выбора подсказки
+    onHintSelected(hint) {
+      console.log('Выбрана подсказка:', hint.name)
+    },
+
+    // Добавление подсказки в чат
+    onAddHintToChat(hint) {
+      const message = `Расскажите о ${hint.name}`
+      this.onSubmit(message)
     },
 
     cleanup() {
