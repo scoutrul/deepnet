@@ -7,243 +7,258 @@
         <p class="text-gray-600">Система распознавания голоса с контекстными подсказками</p>
       </div>
 
+      <Tabs v-model="activeTab" :tabs="tabList">
+        <template v-slot="{ active }">
+          <!-- Main Content - Single Column -->
+          <div v-if="active === TabKeys.Main" class="space-y-6">
+              <!-- Chat Messages -->
+              <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+                <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+                  <h2 class="text-lg font-semibold text-gray-800">Диалог</h2>
+                  <div class="flex items-center gap-3">
+                    <!-- Кнопка записи -->
+                    <button
+                      @click="toggleRecording"
+                      :class="[
+                        'px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2',
+                        isRecording 
+                          ? 'text-white bg-red-500 hover:bg-red-600 shadow-lg' 
+                          : (isInitializing || isDiarizationConnecting)
+                            ? 'text-gray-500 bg-gray-100 cursor-not-allowed'
+                            : 'text-green-600 bg-green-50 hover:bg-green-100 border border-green-200'
+                      ]"
+                      :disabled="isInitializing || isDiarizationConnecting"
+                    >
+                      <div 
+                        :class="[
+                          'w-3 h-3 rounded-full',
+                          isRecording 
+                            ? 'bg-white animate-pulse' 
+                            : (isInitializing || isDiarizationConnecting)
+                              ? 'bg-gray-400 animate-spin'
+                              : 'bg-green-500'
+                        ]"
+                      ></div>
+                      <span v-if="isInitializing">Инициализация...</span>
+                      <span v-else-if="isDiarizationConnecting">Подключение...</span>
+                      <span v-else-if="isRecording">Остановить запись</span>
+                      <span v-else>Начать запись</span>
+                    </button>
 
-      <!-- Main Content - Single Column -->
-      <div class="space-y-6">
-          <!-- Chat Messages -->
-          <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
-            <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
-              <h2 class="text-lg font-semibold text-gray-800">Диалог</h2>
-              <div class="flex items-center gap-3">
-                <!-- Кнопка записи -->
-                <button
-                  @click="toggleRecording"
-                  :class="[
-                    'px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 flex items-center gap-2',
-                    isRecording 
-                      ? 'text-white bg-red-500 hover:bg-red-600 shadow-lg' 
-                      : (isInitializing || isDiarizationConnecting)
-                        ? 'text-gray-500 bg-gray-100 cursor-not-allowed'
-                        : 'text-green-600 bg-green-50 hover:bg-green-100 border border-green-200'
-                  ]"
-                  :disabled="isInitializing || isDiarizationConnecting"
-                >
-                  <div 
-                    :class="[
-                      'w-3 h-3 rounded-full',
-                      isRecording 
-                        ? 'bg-white animate-pulse' 
-                        : (isInitializing || isDiarizationConnecting)
-                          ? 'bg-gray-400 animate-spin'
-                          : 'bg-green-500'
-                    ]"
-                  ></div>
-                  <span v-if="isInitializing">Инициализация...</span>
-                  <span v-else-if="isDiarizationConnecting">Подключение...</span>
-                  <span v-else-if="isRecording">Остановить запись</span>
-                  <span v-else>Начать запись</span>
-                </button>
+                    
+                    <!-- Кнопка очистки -->
+                    <button
+                      @click="clearDialog"
+                      class="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors duration-200 border border-red-200"
+                      :disabled="!hasDiarizedMessages"
+                    >
+                      Очистить диалог
+                    </button>
+                  </div>
+                </div>
+                <div class="px-6 py-4 space-y-3 max-h-96 overflow-y-auto">
+                  <!-- Диаризованные сообщения -->
+                  <div v-if="hasDiarizedMessages" class="space-y-2">
+                    <DiarizedMessage 
+                      v-for="message in diarizedMessages" 
+                      :key="message.id" 
+                      :message="message"
+                      :show-metadata="false"
+                    />
+                  </div>
+                  
+                  <!-- Обычные сообщения (если есть) -->
+                  <div v-if="messages.length > 0" class="space-y-2">
+                    <div class="text-gray-500 text-xs mb-2 border-t border-slate-200 pt-2">
+                      Обычные сообщения: {{ messages.length }}
+                    </div>
+                  <Message 
+                    v-for="m in messages" 
+                    :key="m.id" 
+                    :message="m" 
+                    :queued="queuedTerms"
+                    @retry="onRetry" 
+                    @clarify="onClarify"
+                    @word-click="onWordClick" 
+                    @respond-as-user="onRespondAsUser" 
+                    @continue-as-bot="onContinueAsBot" 
+                  />
+                  </div>
+                  
+                  <!-- Индикатор записи -->
+                  <div v-if="isRecording" class="text-center py-4">
+                    <div class="inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-lg">
+                      <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                      <span class="text-sm font-medium text-red-700">
+                        Идет запись {{ audioSourcesText }}...
+                      </span>
+                    </div>
+                    <div v-if="audioMixerState" class="mt-2 text-xs text-gray-600">
+                      <div class="flex justify-center gap-4">
+                        <span :class="isMicrophoneActive ? 'text-green-600' : 'text-red-500'">
+                          🎤 Микрофон: {{ isMicrophoneActive ? 'активен' : 'недоступен' }}
+                        </span>
+                        <span :class="isSystemAudioActive ? 'text-green-600' : 'text-orange-500'">
+                          🔊 Системный звук: {{ isSystemAudioActive ? 'активен' : 'недоступен' }}
+                        </span>
+                      </div>
+                    </div>
+                    <div v-if="!hasDeepGramKey" class="mt-2 text-xs text-amber-600">
+                      ⚠️ Запись без диаризации (DeepGram не настроен)
+                    </div>
+                    <div v-if="diarizationError" class="mt-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
+                      ❌ Ошибка диаризации: {{ diarizationError }}
+                    </div>
+                  </div>
+                  
+                  <!-- Пустое состояние -->
+                  <div v-if="!hasDiarizedMessages && messages.length === 0 && !isRecording" class="text-gray-500 text-sm text-center py-8">
+                    <div class="mb-2">🎭 Диаризация диалогов</div>
+                    <div class="text-xs">Нажмите "Начать запись" для распознавания речи</div>
+                    <div class="mt-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                      💡 Автоматический захват микрофона и системного звука одновременно
+                      <div class="mt-1 text-xs text-blue-500">
+                        Распознавание речи из всех источников: микрофон + приложения + вкладки
+                      </div>
+                    </div>
+                    <div v-if="isMacOS" class="mt-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
+                      🍎 macOS: Решение для системного звука
+                      <div class="mt-1 text-xs text-blue-500">
+                        <strong>Работает:</strong> Откройте Zoom/встречи в другом браузере, а это приложение - в текущем. Тогда микрофон будет захватывать звук из динамиков!
+                      </div>
+                    </div>
+                    <div v-if="!hasDeepGramKey" class="mt-2 text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
+                      ⚠️ DeepGram API ключ не настроен - запись будет работать без диаризации
+                      <div class="mt-1 text-xs text-amber-500">
+                        Проверьте VITE_DEEPGRAM_API_KEY в .env файле
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="draft" class="w-full flex justify-end">
+                    <div class="max-w-[80%] rounded-2xl px-3 py-2 shadow-sm border bg-slate-900 text-slate-50 border-slate-800">
+                      <div class="flex items-center gap-1 text-sm">
+                        <span class="animate-pulse">●</span>
+                        <span class="animate-pulse delay-150">●</span>
+                        <span class="animate-pulse delay-300">●</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-else class="h-4"></div>
+                </div>
+                <div class="border-t border-slate-200 px-6 py-4">
+                  <ChatInput 
+                    ref="chatInput" 
+                    :loading="loading" 
+                    @submit="onSubmit"
+                    @draft-change="onDraftChange" 
+                  />
+                  <p class="mt-2 text-xs text-slate-500">
+                    Подсказки: ЛКМ — сразу спросить. ПКМ/⌃-клик — добавить в запрос. Enter — отправить.
+                  </p>
+                </div>
+              </div>
 
-                
-                <!-- Кнопка очистки -->
-                <button
-                  @click="clearDialog"
-                  class="px-3 py-1.5 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors duration-200 border border-red-200"
-                  :disabled="!hasDiarizedMessages"
-                >
-                  Очистить диалог
-                </button>
+            </div>
+
+            <!-- Context Management -->
+            <div v-if="active === TabKeys.Main" class="bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div class="px-6 py-4 border-b border-slate-200">
+                <h2 class="text-lg font-semibold text-gray-800">Контекст</h2>
+              </div>
+              <div class="px-6 py-4">
+                <ContextPanel ref="contextPanel" />
               </div>
             </div>
-            <div class="px-6 py-4 space-y-3 max-h-96 overflow-y-auto">
-              <!-- Диаризованные сообщения -->
-              <div v-if="hasDiarizedMessages" class="space-y-2">
-                <DiarizedMessage 
-                  v-for="message in diarizedMessages" 
-                  :key="message.id" 
-                  :message="message"
-                  :show-metadata="false"
+
+            <!-- Hints Panel -->
+            <div v-if="active === TabKeys.Main" class="bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div class="px-6 py-4 border-b border-slate-200">
+                <h2 class="text-lg font-semibold text-gray-800">Подсказки</h2>
+              </div>
+              <div class="px-6 py-4">
+                <HintPanel ref="hintPanel" />
+              </div>
+            </div>
+
+            <!-- Interview Hints Panel -->
+            <div v-if="active === TabKeys.Main" class="bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div class="px-6 py-4 border-b border-slate-200">
+                <h2 class="text-lg font-semibold text-gray-800">Подсказки для интервью</h2>
+              </div>
+              <div class="px-6 py-4">
+                <InterviewHintsPanel 
+                  ref="interviewHintsPanel"
+                  :hints="interviewHints"
+                  :context="interviewContext"
+                  :is-loading="isGeneratingHints"
+                  :is-form-valid="isInterviewFormValid"
+                  @generate-hints="onGenerateHints"
+                  @hint-selected="onHintSelected"
+                  @add-to-chat="onAddHintToChat"
                 />
               </div>
-              
-              <!-- Обычные сообщения (если есть) -->
-              <div v-if="messages.length > 0" class="space-y-2">
-                <div class="text-gray-500 text-xs mb-2 border-t border-slate-200 pt-2">
-                  Обычные сообщения: {{ messages.length }}
-                </div>
-              <Message 
-                v-for="m in messages" 
-                :key="m.id" 
-                :message="m" 
-                :queued="queuedTerms"
-                @retry="onRetry" 
-                @clarify="onClarify"
-                @word-click="onWordClick" 
-                @respond-as-user="onRespondAsUser" 
-                @continue-as-bot="onContinueAsBot" 
-              />
-              </div>
-              
-              <!-- Индикатор записи -->
-              <div v-if="isRecording" class="text-center py-4">
-                <div class="inline-flex items-center gap-2 px-4 py-2 bg-red-50 border border-red-200 rounded-lg">
-                  <div class="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-                  <span class="text-sm font-medium text-red-700">
-                    Идет запись {{ audioSourcesText }}...
-                  </span>
-                </div>
-                <div v-if="audioMixerState" class="mt-2 text-xs text-gray-600">
-                  <div class="flex justify-center gap-4">
-                    <span :class="isMicrophoneActive ? 'text-green-600' : 'text-red-500'">
-                      🎤 Микрофон: {{ isMicrophoneActive ? 'активен' : 'недоступен' }}
-                    </span>
-                    <span :class="isSystemAudioActive ? 'text-green-600' : 'text-orange-500'">
-                      🔊 Системный звук: {{ isSystemAudioActive ? 'активен' : 'недоступен' }}
-                    </span>
-                  </div>
-                </div>
-                <div v-if="!hasDeepGramKey" class="mt-2 text-xs text-amber-600">
-                  ⚠️ Запись без диаризации (DeepGram не настроен)
-                </div>
-                <div v-if="diarizationError" class="mt-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
-                  ❌ Ошибка диаризации: {{ diarizationError }}
-                </div>
-              </div>
-              
-              <!-- Пустое состояние -->
-              <div v-if="!hasDiarizedMessages && messages.length === 0 && !isRecording" class="text-gray-500 text-sm text-center py-8">
-                <div class="mb-2">🎭 Диаризация диалогов</div>
-                <div class="text-xs">Нажмите "Начать запись" для распознавания речи</div>
-                <div class="mt-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
-                  💡 Автоматический захват микрофона и системного звука одновременно
-                  <div class="mt-1 text-xs text-blue-500">
-                    Распознавание речи из всех источников: микрофон + приложения + вкладки
-                  </div>
-                </div>
-                <div v-if="isMacOS" class="mt-2 text-xs text-blue-600 bg-blue-50 px-3 py-2 rounded-lg border border-blue-200">
-                  🍎 macOS: Решение для системного звука
-                  <div class="mt-1 text-xs text-blue-500">
-                    <strong>Работает:</strong> Откройте Zoom/встречи в другом браузере, а это приложение - в текущем. Тогда микрофон будет захватывать звук из динамиков!
-                  </div>
-                </div>
-                <div v-if="!hasDeepGramKey" class="mt-2 text-xs text-amber-600 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200">
-                  ⚠️ DeepGram API ключ не настроен - запись будет работать без диаризации
-                  <div class="mt-1 text-xs text-amber-500">
-                    Проверьте VITE_DEEPGRAM_API_KEY в .env файле
-                  </div>
-                </div>
-              </div>
-              <div v-if="draft" class="w-full flex justify-end">
-                <div class="max-w-[80%] rounded-2xl px-3 py-2 shadow-sm border bg-slate-900 text-slate-50 border-slate-800">
-                  <div class="flex items-center gap-1 text-sm">
-                    <span class="animate-pulse">●</span>
-                    <span class="animate-pulse delay-150">●</span>
-                    <span class="animate-pulse delay-300">●</span>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="h-4"></div>
             </div>
-            <div class="border-t border-slate-200 px-6 py-4">
-              <ChatInput 
-                ref="chatInput" 
-                :loading="loading" 
-                @submit="onSubmit"
-                @draft-change="onDraftChange" 
-              />
-              <p class="mt-2 text-xs text-slate-500">
-                Подсказки: ЛКМ — сразу спросить. ПКМ/⌃-клик — добавить в запрос. Enter — отправить.
-              </p>
+
+            <!-- Interview Context Panel -->
+            <div v-if="active === TabKeys.Main" class="bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div class="px-6 py-4 border-b border-slate-200">
+                <h2 class="text-lg font-semibold text-gray-800">Контекст интервью</h2>
+              </div>
+              <div class="px-6 py-4">
+                <ContextInputPanel 
+                  ref="contextInputPanel"
+                  @form-validation-changed="onFormValidationChanged"
+                />
+              </div>
             </div>
-          </div>
-
-        </div>
-
-        <!-- Context Management -->
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
-          <div class="px-6 py-4 border-b border-slate-200">
-            <h2 class="text-lg font-semibold text-gray-800">Контекст</h2>
-          </div>
-          <div class="px-6 py-4">
-            <ContextPanel ref="contextPanel" />
-          </div>
-        </div>
-
-        <!-- Hints Panel -->
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
-          <div class="px-6 py-4 border-b border-slate-200">
-            <h2 class="text-lg font-semibold text-gray-800">Подсказки</h2>
-          </div>
-          <div class="px-6 py-4">
-            <HintPanel ref="hintPanel" />
-          </div>
-        </div>
-
-        <!-- Interview Hints Panel -->
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
-          <div class="px-6 py-4 border-b border-slate-200">
-            <h2 class="text-lg font-semibold text-gray-800">Подсказки для интервью</h2>
-          </div>
-          <div class="px-6 py-4">
-            <InterviewHintsPanel 
-              ref="interviewHintsPanel"
-              :hints="interviewHints"
-              :context="interviewContext"
-              :is-loading="isGeneratingHints"
-              :is-form-valid="isInterviewFormValid"
-              @generate-hints="onGenerateHints"
-              @hint-selected="onHintSelected"
-              @add-to-chat="onAddHintToChat"
-            />
-          </div>
-        </div>
-
-        <!-- Interview Context Panel -->
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
-          <div class="px-6 py-4 border-b border-slate-200">
-            <h2 class="text-lg font-semibold text-gray-800">Контекст интервью</h2>
-          </div>
-          <div class="px-6 py-4">
-            <ContextInputPanel 
-              ref="contextInputPanel"
-              @form-validation-changed="onFormValidationChanged"
-            />
-          </div>
-        </div>
 
 
-        <!-- Search Panel -->
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
-          <div class="px-6 py-4 border-b border-slate-200">
-            <h2 class="text-lg font-semibold text-gray-800">Поиск</h2>
-          </div>
-          <div class="px-6 py-4">
-            <SearchPanel 
-              ref="searchPanel"
-              @use-in-chat="onUseInChat"
-            />
-          </div>
+            <!-- Search Panel -->
+            <div v-if="active === TabKeys.Main" class="bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div class="px-6 py-4 border-b border-slate-200">
+                <h2 class="text-lg font-semibold text-gray-800">Поиск</h2>
+              </div>
+              <div class="px-6 py-4">
+                <SearchPanel 
+                  ref="searchPanel"
+                  @use-in-chat="onUseInChat"
+                />
+              </div>
+            </div>
+
+          <!-- Status Bar -->
+          <div v-if="active === TabKeys.Main" class="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm">
+            <div class="px-6 py-4">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                  <div class="flex items-center space-x-2">
+                    <div class="w-3 h-3 rounded-full" :class="connectionStatusClass"></div>
+                    <span class="text-sm text-gray-600">{{ connectionStatus }}</span>
+                  </div>
+                  <div class="text-sm text-gray-600">
+                    Режим: {{ isDeepGramMode ? 'DeepGram' : 'Web Speech API' }}
+                  </div>
+                </div>
+                <div class="text-sm text-gray-500">
+                  Сообщений: {{ messages.length }} | Фраз: {{ phraseCount }}
+              </div>
+                      </div>
         </div>
       </div>
 
-      <!-- Status Bar -->
-      <div class="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm">
-        <div class="px-6 py-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-4">
-              <div class="flex items-center space-x-2">
-                <div class="w-3 h-3 rounded-full" :class="connectionStatusClass"></div>
-                <span class="text-sm text-gray-600">{{ connectionStatus }}</span>
+          <!-- Chat Tab Content -->
+          <div v-if="active === TabKeys.Chat" class="space-y-6">
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+              <div class="px-6 py-4 border-b border-slate-200">
+                <h2 class="text-lg font-semibold text-gray-800">Чат</h2>
               </div>
-              <div class="text-sm text-gray-600">
-                Режим: {{ isDeepGramMode ? 'DeepGram' : 'Web Speech API' }}
+              <div class="px-6 py-4 text-sm text-gray-600">
+                Контент чата будет добавлен позже.
               </div>
             </div>
-            <div class="text-sm text-gray-500">
-              Сообщений: {{ messages.length }} | Фраз: {{ phraseCount }}
           </div>
-        </div>
-      </div>
+        </template>
+      </Tabs>
     </div>
   </div>
   
@@ -258,10 +273,17 @@ import HintPanel from './context/HintPanel.vue'
 import SearchPanel from './context/SearchPanel.vue'
 import ContextInputPanel from './interview/ContextInputPanel.vue'
 import InterviewHintsPanel from './interview/InterviewHintsPanel.vue'
+import Tabs from './ui/Tabs.vue'
 import { uiBusinessAdapter } from '../adapters'
 import { hintGeneratorService } from '../services/interview/hintGeneratorService'
 import { interviewContextService } from '../services/interview/interviewContextService'
 // Используем адаптер для связи с сервисами
+
+// Перечисление ключей вкладок (строго ограниченные значения)
+export const TabKeys = Object.freeze({
+  Main: 'main',
+  Chat: 'chat'
+})
 
 export default {
   name: 'MainApp',
@@ -273,7 +295,8 @@ export default {
     HintPanel,
     SearchPanel,
     ContextInputPanel,
-    InterviewHintsPanel
+    InterviewHintsPanel,
+    Tabs
   },
   data() {
     return {
@@ -301,10 +324,21 @@ export default {
       interviewHints: [],
       interviewContext: null,
       isGeneratingHints: false,
-      isInterviewFormValid: false
+      isInterviewFormValid: false,
+
+      /** @type {'main'|'chat'} */
+      activeTab: TabKeys.Main,
+
+      tabList: [
+        { key: TabKeys.Main, label: 'Основное' },
+        { key: TabKeys.Chat, label: 'Чат' }
+      ]
     }
   },
   computed: {
+    TabKeys() {
+      return TabKeys
+    },
     connectionStatusClass() {
       switch (this.connectionStatus) {
         case 'Подключено':
@@ -364,6 +398,25 @@ export default {
     // Определение macOS
     isMacOS() {
       return /Mac|iPhone|iPad|iPod/.test(navigator.userAgent)
+    }
+  },
+  watch: {
+    activeTab(newVal) {
+      try {
+        localStorage.setItem('deepnet_active_tab', newVal)
+      } catch (e) {
+        // ignore
+      }
+    }
+  },
+  created() {
+    try {
+      const saved = localStorage.getItem('deepnet_active_tab')
+      if (saved === TabKeys.Main || saved === TabKeys.Chat) {
+        this.activeTab = /** @type {'main'|'chat'} */ (saved)
+      }
+    } catch (e) {
+      // ignore
     }
   },
   async mounted() {
