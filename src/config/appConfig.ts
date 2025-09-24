@@ -8,18 +8,21 @@ export const appConfig = {
       const finalKey = envKey || localKey
       return finalKey
     })(),
-    model: 'nova-3',
-    language: 'ru-RU',
+    model: 'nova-2',
+    language: 'ru',
     streaming: true,
     interimResults: true,
     punctuate: true,
     profanity_filter: false,
-    diarize: true, // Включаем диаризацию
+    diarize: true, // Включаем диаризацию обратно
     multichannel: false,
     alternatives: 1,
     numerals: true,
     smart_format: true,
-    filler_words: false
+    filler_words: false,
+    // Оптимизация окончания фразы
+    endpointing: 900,
+    vad_events: true
   },
 
   // LLM Configuration (OpenRouter)
@@ -64,7 +67,11 @@ export const appConfig = {
     maxAlternatives: 1,
     wordTimeout: 1500,
     quickWordTimeout: 800,
-    minWordLength: 3
+    minWordLength: 3,
+    // Интервал чанков MediaRecorder для стриминга (мс)
+    chunkMs: 5000,
+    // Порог уверенности для батч-режима
+    confidenceThreshold: 0.6
   },
 
   // Context Settings

@@ -93,6 +93,16 @@ export class DiarizationService {
   async start(): Promise<void> {
     console.log('🎤 [DIARIZATION] Запуск диаризации. Текущее состояние - isActive:', this.isActive, 'isPaused:', this.isPaused, 'isConnecting:', this.isConnecting)
     
+    // Если диаризация отключена в конфиге, выходим
+    if (appConfig.deepgram.diarize === false) {
+      console.log('🎤 [DIARIZATION] Диаризация отключена конфигурацией, пропускаем запуск')
+      this.isActive = false
+      this.isConnecting = false
+      this.isPaused = false
+      this.emit('onStateChange', { isActive: false, isConnecting: false, isPaused: false })
+      return
+    }
+    
     // Проверяем, не идет ли уже процесс запуска
     if (this.isConnecting) {
       console.log('🎤 [DIARIZATION] Диаризация уже запускается, пропускаем')
@@ -131,24 +141,28 @@ export class DiarizationService {
       // Создаем соединение с правильной конфигурацией для русского языка
       const connectionOptions = {
         // Основные параметры
-        model: 'nova-2',              // Стабильная модель
-        language: 'ru',               // РУССКИЙ ЯЗЫК
+        model: appConfig.deepgram.model,
+        language: appConfig.deepgram.language,
         
         // Базовые результаты
-        interim_results: true,        // Промежуточные результаты
+        interim_results: appConfig.deepgram.interimResults === true,
         
         // Добавляем параметры для лучшего распознавания
-        smart_format: true,           // Умное форматирование
-        punctuate: true,              // Пунктуация
+        smart_format: appConfig.deepgram.smart_format === true,
+        punctuate: appConfig.deepgram.punctuate === true,
         
         // Параметры для диаризации
-        diarize: true,                // Включаем диаризацию
-        diarize_version: '2023-05-22', // Версия диаризации
+        diarize: appConfig.deepgram.diarize === true,
+        ...(appConfig.deepgram.diarize === true ? { diarize_version: '2023-05-22' } : {}),
+
+        // Endpointing/VAD
+        endpointing: appConfig.deepgram.endpointing || 900,
+        vad_events: appConfig.deepgram.vad_events === true,
         
         // Параметры аудио для лучшей совместимости
-        encoding: 'linear16',         // PCM 16-bit
-        sample_rate: 16000,           // 16kHz sample rate
-        channels: 1                   // Моно
+        encoding: 'linear16',
+        sample_rate: 16000,
+        channels: 1
       }
       
       try {

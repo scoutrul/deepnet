@@ -248,14 +248,7 @@
 
           <!-- Chat Tab Content -->
           <div v-if="active === TabKeys.Chat" class="space-y-6">
-            <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
-              <div class="px-6 py-4 border-b border-slate-200">
-                <h2 class="text-lg font-semibold text-gray-800">Чат</h2>
-              </div>
-              <div class="px-6 py-4 text-sm text-gray-600">
-                Контент чата будет добавлен позже.
-              </div>
-            </div>
+            <LiveDictation :adapter="adapter" />
           </div>
         </template>
       </Tabs>
@@ -274,6 +267,7 @@ import SearchPanel from './context/SearchPanel.vue'
 import ContextInputPanel from './interview/ContextInputPanel.vue'
 import InterviewHintsPanel from './interview/InterviewHintsPanel.vue'
 import Tabs from './ui/Tabs.vue'
+import LiveDictation from './chat/LiveDictation.vue'
 import { uiBusinessAdapter } from '../adapters'
 import { hintGeneratorService } from '../services/interview/hintGeneratorService'
 import { interviewContextService } from '../services/interview/interviewContextService'
@@ -296,7 +290,8 @@ export default {
     SearchPanel,
     ContextInputPanel,
     InterviewHintsPanel,
-    Tabs
+    Tabs,
+    LiveDictation
   },
   data() {
     return {
@@ -666,8 +661,8 @@ export default {
           }, 1000) // Ждем 1 секунду для подключения
         }
         
-        // Начинаем запись с чанками 1000мс
-        this.mediaRecorder.start(1000) // Отправляем данные каждую секунду
+        // Начинаем запись с чанками из конфига
+        this.mediaRecorder.start(this.adapter?.getConfig?.('voice.chunkMs') || 2000)
         this.isRecording = true
       } catch (error) {
         this.showError('Не удалось начать запись: ' + error.message)
