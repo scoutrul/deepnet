@@ -71,7 +71,17 @@ export const appConfig = {
     // Интервал чанков MediaRecorder для стриминга (мс)
     chunkMs: 5000,
     // Порог уверенности для батч-режима
-    confidenceThreshold: 0.6
+    confidenceThreshold: 0.6,
+    // Voice Activity Detection настройки
+    vad: {
+      enabled: true,
+      volumeThreshold: 0.015,    // Чувствительность к речи (0-1)
+      silenceDuration: 300,      // Ультра-быстрая пауза (мс)
+      quickSilenceDuration: 300, // Единая пауза для всех случаев (мс)
+      minBatchDuration: 0,       // Убираем минимальное время - отправляем любой батч
+      maxBatchDuration: 8000,    // Максимальное время батча (мс) - уменьшено
+      analysisInterval: 25       // Частота анализа (мс) - ещё чаще
+    }
   },
 
   // Context Settings

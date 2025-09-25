@@ -10,6 +10,7 @@ export interface BatchTranscriptionOptions {
 export interface BatchTranscriptionResult {
   transcript: string
   confidence: number
+  rawResponse?: any // Для отладки
 }
 
 export async function transcribeBlobWithDeepgram(blob: Blob, options: BatchTranscriptionOptions = {}): Promise<BatchTranscriptionResult> {
@@ -46,8 +47,24 @@ export async function transcribeBlobWithDeepgram(blob: Blob, options: BatchTrans
   }
 
   const json = await res.json()
-  const alt = json?.results?.channels?.[0]?.alternatives?.[0]
+  
+  // Детальное логирование для отладки
+  console.log('🎤 [BATCH] Полный ответ от Deepgram:', JSON.stringify(json, null, 2))
+  
+  const channel = json?.results?.channels?.[0]
+  const alt = channel?.alternatives?.[0]
   const transcript = (alt?.transcript || '').trim()
   const confidence = typeof alt?.confidence === 'number' ? alt.confidence : 0
-  return { transcript, confidence }
+  
+  // Логируем все альтернативы если есть
+  if (channel?.alternatives && channel.alternatives.length > 1) {
+    console.log('🎤 [BATCH] Дополнительные альтернативы:')
+    channel.alternatives.forEach((alternative, idx) => {
+      console.log(`  ${idx}: "${alternative.transcript}" (confidence: ${alternative.confidence})`)
+    })
+  }
+  
+  console.log(`🎤 [BATCH] Результат: transcript="${transcript}", confidence=${confidence}`)
+  
+  return { transcript, confidence, rawResponse: json }
 }

@@ -29,7 +29,7 @@
           <p class="leading-7 text-slate-800">
             <span v-for="(chunk, idx) in completedChunks" :key="'c'+idx">
               <br v-if="chunk === '\n'" />
-              <span v-else class="mr-1">{{ chunk }}</span>
+              <span v-else class="mr-1 text-slate-800">{{ chunk }}</span>
             </span>
             <span v-if="currentPartial" class="text-slate-500">
               {{ currentPartial }}
@@ -44,6 +44,12 @@
         <span>
           {{ isRecording ? 'Диктовка активна' : 'Диктовка неактивна' }}
           <span v-if="!hasDeepGramKey" class="ml-2 text-amber-600">(DeepGram не настроен)</span>
+          <span v-if="useVAD && vadState" class="ml-2">
+            • VAD: {{ vadState.isSpeaking ? '🎤 речь' : '🔇 тишина' }} 
+            ({{ Math.round(vadState.currentVolume * 1000) }})
+            <span v-if="vadState.hadSufficientPause && !vadState.isSpeaking" class="text-blue-600">✓ пауза</span>
+            <span v-if="vadState.shouldFlushBatch" class="text-orange-600 font-medium">⚡ отправка</span>
+          </span>
         </span>
       </div>
       <div v-if="errorMessage" class="mt-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
@@ -55,6 +61,8 @@
 
 <script>
 import { uiBusinessAdapter } from '../../adapters'
+import { voiceActivityDetector } from '../../services/voice/voiceActivityDetector'
+import { appConfig } from '../../config/appConfig'
 
 export default {
   name: 'LiveDictation',
@@ -86,6 +94,10 @@ export default {
       mediaRecorder: null,
       batchChunks: [],
       batchTimer: null,
+      // VAD состояние
+      vadUnsubscribe: null,
+      vadState: null,
+      useVAD: appConfig.voice.vad?.enabled || false,
       // Адаптивное окно для стриминга
       windowDurations: [1000, 3000, 5000, 10000],
       windowIndex: 0,
@@ -185,45 +197,112 @@ export default {
       for (const t of supported) { if (MediaRecorder.isTypeSupported(t)) { mimeType = t; break } }
       this.mediaRecorder = new MediaRecorder(this.mediaStream, { mimeType })
       this.batchChunks = []
+      
+      // Настройка VAD если включен
+      if (this.useVAD) {
+        try {
+          const vadConfig = appConfig.voice.vad || {}
+          voiceActivityDetector.updateConfig(vadConfig)
+          await voiceActivityDetector.connect(this.mediaStream)
+          
+          this.vadUnsubscribe = voiceActivityDetector.onStateChange((state) => {
+            this.vadState = state
+            // Отправляем батч когда VAD определяет готовность
+            if (state.shouldFlushBatch && this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+              console.log('🎤 [VAD] Отправляем батч по сигналу VAD')
+              this.mediaRecorder.stop()
+            }
+          })
+          
+          console.log('🎤 [LiveDictation] VAD подключен для умной отправки батчей')
+        } catch (e) {
+          console.warn('🎤 [LiveDictation] Не удалось подключить VAD, используем таймер:', e)
+          this.useVAD = false
+        }
+      }
+      
       this.mediaRecorder.ondataavailable = (e) => {
         if (e.data && e.data.size > 0) this.batchChunks.push(e.data)
       }
+      
       this.mediaRecorder.onstop = async () => {
         try {
           const blob = new Blob(this.batchChunks, { type: mimeType })
+          console.log(`🎤 [LiveDictation] Отправляем батч размером ${Math.round(blob.size/1024)}KB`)
+          
           const { transcribeBlobWithDeepgram } = await import('../../services/voice/batchTranscriptionService')
           const result = await transcribeBlobWithDeepgram(blob)
-          const threshold = Number((this.adapter?.getConfig && this.adapter.getConfig('voice.confidenceThreshold')) || 0.6)
-          if (result?.transcript && (result.confidence || 0) >= threshold) {
-            // Добавляем завершённый блок в поток и делаем авто-абзац
+          
+          console.log(`🎤 [LiveDictation] Получен результат: "${result?.transcript}", confidence=${result?.confidence}`)
+          
+          if (result?.transcript) {
+            // Добавляем все результаты без фильтрации по confidence
             this.completedChunks.push(result.transcript)
             this.completedChunks.push('\n')
             this.$emit('use-in-chat', result.transcript)
+            console.log(`✅ [LiveDictation] Добавлен текст: "${result.transcript}" (confidence: ${result.confidence})`)
             this.$nextTick(() => this.scrollToBottom())
+          } else {
+            console.log(`❌ [LiveDictation] Пустой результат распознавания`)
           }
         } catch (e) {
+          console.error('🎤 [LiveDictation] Ошибка батч-распознавания:', e)
           this.errorMessage = 'Ошибка батч-распознавания: ' + (e?.message || e)
         } finally {
           this.batchChunks = []
+          
+          // Сбрасываем VAD состояние после отправки
+          if (this.useVAD && voiceActivityDetector) {
+            voiceActivityDetector.resetBatch()
+          }
+          
           if (this.isRecording) {
             this.mediaRecorder.start()
+            
+            // Устанавливаем таймер как fallback (максимальное время)
             if (this.batchTimer) clearTimeout(this.batchTimer)
+            const maxTime = this.useVAD ? (appConfig.voice.vad?.maxBatchDuration || 15000) : this.batchMs
             this.batchTimer = setTimeout(() => {
-              try { if (this.mediaRecorder && this.mediaRecorder.state === 'recording') this.mediaRecorder.stop() } catch (e) {}
-            }, this.batchMs)
+              try { 
+                if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                  console.log('🎤 [LiveDictation] Принудительная отправка батча по максимальному времени')
+                  this.mediaRecorder.stop() 
+                }
+              } catch (e) {}
+            }, maxTime)
           }
         }
       }
+      
       this.mediaRecorder.start()
+      console.log(`🎤 [LiveDictation] Начата запись батча, VAD: ${this.useVAD ? 'включен (пауза 300мс)' : 'выключен'}`)
+      
+      // Устанавливаем fallback таймер
       if (this.batchTimer) clearTimeout(this.batchTimer)
+      const maxTime = this.useVAD ? (appConfig.voice.vad?.maxBatchDuration || 15000) : this.batchMs
       this.batchTimer = setTimeout(() => {
-        try { if (this.mediaRecorder && this.mediaRecorder.state === 'recording') this.mediaRecorder.stop() } catch (e) {}
-      }, this.batchMs)
+        try { 
+          if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+            console.log('🎤 [LiveDictation] Принудительная отправка батча по таймеру')
+            this.mediaRecorder.stop() 
+          }
+        } catch (e) {}
+      }, maxTime)
+      
       this.isRecording = true
     },
 
     async stopBatchRecording() {
       try {
+        // Отключаем VAD
+        if (this.vadUnsubscribe) {
+          this.vadUnsubscribe()
+          this.vadUnsubscribe = null
+        }
+        if (this.useVAD) {
+          voiceActivityDetector.disconnect()
+        }
+        
         if (this.batchTimer) {
           clearTimeout(this.batchTimer)
           this.batchTimer = null
@@ -240,6 +319,7 @@ export default {
       this.mediaRecorder = null
       this.mediaStream = null
       this.batchChunks = []
+      this.vadState = null
     },
 
     async waitForDiarizationReady(timeoutMs) {
