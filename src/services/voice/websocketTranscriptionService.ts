@@ -24,36 +24,27 @@ export class WebSocketTranscriptionService {
 
   private async initializeDeepgram() {
     try {
-      console.log('🌐 [WebSocketTranscription] Инициализация Deepgram...')
-      
       const apiKey = appConfig.deepgram.apiKey
       
-      console.log('🌐 [WebSocketTranscription] API ключ:', apiKey ? `${apiKey.substring(0, 10)}...` : 'НЕ НАЙДЕН')
-      
       if (!apiKey) {
-        console.warn('🌐 [WebSocketTranscription] API ключ DeepGram не найден в env или localStorage')
+        console.warn('WebSocket: API ключ DeepGram не найден')
         return
       }
 
-      // Deepgram API ключи могут иметь разные форматы, не только sk-
       if (apiKey.length < 20) {
-        console.warn('🌐 [WebSocketTranscription] API ключ DeepGram слишком короткий')
+        console.warn('WebSocket: API ключ DeepGram слишком короткий')
         return
       }
 
-      console.log('🌐 [WebSocketTranscription] Импорт Deepgram SDK...')
       const { createClient } = await import('@deepgram/sdk')
-      
-      console.log('🌐 [WebSocketTranscription] Создание клиента...')
       this.deepgram = createClient(apiKey)
       
       if (!this.deepgram) {
         throw new Error('Не удалось создать Deepgram клиент')
       }
       
-      console.log('✅ [WebSocketTranscription] Deepgram инициализирован успешно')
     } catch (error) {
-      console.error('❌ [WebSocketTranscription] Ошибка инициализации Deepgram:', error)
+      console.error('❌ WebSocket: Ошибка инициализации Deepgram:', error)
     }
   }
 
@@ -70,11 +61,8 @@ export class WebSocketTranscriptionService {
     }
 
     if (this.isActive || this.isConnecting) {
-      console.log('🌐 [WebSocketTranscription] Уже активен или подключается')
       return
     }
-
-    console.log('🌐 [WebSocketTranscription] Запуск WebSocket соединения...')
 
     try {
       this.isConnecting = true
@@ -100,8 +88,6 @@ export class WebSocketTranscriptionService {
         connectionOptions.diarize_version = '2024-01-09'
       }
 
-      console.log('🌐 [WebSocketTranscription] Опции подключения:', connectionOptions)
-
       // Создаем WebSocket соединение
       this.connection = this.deepgram.listen.live(connectionOptions)
       
@@ -111,12 +97,8 @@ export class WebSocketTranscriptionService {
       this.isConnecting = false
       this.isActive = true
       
-      console.log('🌐 [WebSocketTranscription] Статус установлен: isActive =', this.isActive)
-      
       // Настраиваем отправку аудио
       this.setupAudioStream(mediaStream)
-      
-      console.log('✅ [WebSocketTranscription] WebSocket соединение установлено')
       
     } catch (error) {
       this.isConnecting = false
@@ -129,31 +111,26 @@ export class WebSocketTranscriptionService {
     if (!this.connection) return
 
     this.connection.on('open', () => {
-      console.log('🌐 [WebSocketTranscription] Соединение открыто')
-      // НЕ меняем isActive здесь - он уже установлен
-      console.log('🌐 [WebSocketTranscription] Текущий статус: isActive =', this.isActive)
+      // Соединение установлено
     })
 
     this.connection.on('Results', (data: any) => {
-      console.log('🌐 [WebSocketTranscription] Получены результаты:', JSON.stringify(data, null, 2))
       this.handleTranscript(data)
     })
 
     this.connection.on('Metadata', (data: any) => {
-      console.log('🌐 [WebSocketTranscription] Метаданные:', JSON.stringify(data, null, 2))
+      // Метаданные получены
     })
 
     this.connection.on('UtteranceEnd', (data: any) => {
-      console.log('🌐 [WebSocketTranscription] Конец высказывания:', JSON.stringify(data, null, 2))
+      // Конец высказывания
     })
 
-    // Добавляем обработчики для всех возможных событий
     this.connection.on('SpeechStarted', (data: any) => {
-      console.log('🌐 [WebSocketTranscription] Начало речи:', data)
+      // Начало речи
     })
 
     this.connection.on('Transcript', (data: any) => {
-      console.log('🌐 [WebSocketTranscription] Транскрипт:', JSON.stringify(data, null, 2))
       this.handleTranscript(data)
     })
 
@@ -163,18 +140,14 @@ export class WebSocketTranscriptionService {
     })
 
     this.connection.on('close', (event: any) => {
-      console.log('🌐 [WebSocketTranscription] Соединение закрыто:', event?.code, event?.reason)
-      console.log('🌐 [WebSocketTranscription] Устанавливаем isActive = false из-за закрытия соединения')
       this.isActive = false
       this.isConnecting = false
       
       // Автоматическое переподключение при неожиданном закрытии
       if (event?.code !== 1000) {
-        console.log('🌐 [WebSocketTranscription] Неожиданное закрытие, попытка переподключения через 2 сек...')
         setTimeout(() => {
           if (!this.isActive && !this.isConnecting) {
-            // Здесь нужен mediaStream для переподключения
-            console.log('🌐 [WebSocketTranscription] Переподключение отложено - нет медиапотока')
+            // Переподключение отложено - нет медиапотока
           }
         }, 2000)
       }
@@ -182,10 +155,7 @@ export class WebSocketTranscriptionService {
   }
 
   private setupAudioStream(mediaStream: MediaStream): void {
-    console.log('🌐 [WebSocketTranscription] Настройка аудиопотока...')
-    
     // Создаем MediaRecorder для отправки аудио в WebSocket
-    // Проверяем поддерживаемые форматы
     const supportedTypes = [
       'audio/webm;codecs=opus',
       'audio/webm',
@@ -201,53 +171,20 @@ export class WebSocketTranscriptionService {
       }
     }
     
-    console.log('🌐 [WebSocketTranscription] Используемый MIME тип:', mimeType)
-    
     const mediaRecorder = new MediaRecorder(mediaStream, { mimeType })
 
     mediaRecorder.ondataavailable = (event) => {
-      console.log('🌐 [WebSocketTranscription] Получен аудио чанк:', {
-        size: event.data.size,
-        hasConnection: !!this.connection,
-        isActive: this.isActive,
-        connectionState: this.connection?.readyState
-      })
-      
       if (event.data.size > 0 && this.connection && this.isActive) {
-        // Отправляем аудио данные в WebSocket
         try {
           this.connection.send(event.data)
-          console.log('✅ [WebSocketTranscription] Отправлен аудио чанк:', {
-            size: Math.round(event.data.size/1024) + 'KB',
-            type: event.data.type,
-            timestamp: new Date().toISOString()
-          })
         } catch (error) {
-          console.error('❌ [WebSocketTranscription] Ошибка отправки аудио:', error)
+          console.error('❌ WebSocket: Ошибка отправки аудио:', error)
         }
-      } else {
-        console.warn('🌐 [WebSocketTranscription] Пропущен чанк:', {
-          size: event.data.size,
-          hasConnection: !!this.connection,
-          isActive: this.isActive,
-          connectionState: this.connection?.readyState,
-          reason: !event.data.size ? 'пустой чанк' : 
-                  !this.connection ? 'нет соединения' : 
-                  !this.isActive ? 'сервис неактивен' : 'неизвестно'
-        })
       }
     }
 
     mediaRecorder.onerror = (error) => {
-      console.error('❌ [WebSocketTranscription] Ошибка MediaRecorder:', error)
-    }
-
-    mediaRecorder.onstart = () => {
-      console.log('🌐 [WebSocketTranscription] MediaRecorder запущен')
-    }
-
-    mediaRecorder.onstop = () => {
-      console.log('🌐 [WebSocketTranscription] MediaRecorder остановлен')
+      console.error('❌ WebSocket: Ошибка MediaRecorder:', error)
     }
 
     // Запускаем запись с оптимальными чанками для Deepgram
@@ -281,12 +218,12 @@ export class WebSocketTranscriptionService {
         type: 'websocket'
       }
 
-      console.log(`🌐 [WebSocketTranscription] Чанк: "${transcript}" (final: ${chunk.isFinal}, confidence: ${chunk.confidence.toFixed(2)})`)
+      // Чанк обработан
 
       this.notifyListeners(chunk)
       
     } catch (error) {
-      console.error('❌ [WebSocketTranscription] Ошибка обработки транскрипта:', error)
+      console.error('❌ WebSocket: Ошибка обработки транскрипта:', error)
     }
   }
 
@@ -301,7 +238,7 @@ export class WebSocketTranscriptionService {
       errorMessage = 'Ошибка WebSocket соединения. Проверьте API ключ и интернет'
     }
 
-    console.error(`❌ [WebSocketTranscription] ${errorMessage}:`, error)
+    console.error(`❌ WebSocket: ${errorMessage}:`, error)
   }
 
   onTranscription(callback: (chunk: WebSocketTranscriptionChunk) => void): () => void {
@@ -320,9 +257,6 @@ export class WebSocketTranscriptionService {
   }
 
   async stop(): Promise<void> {
-    console.log('🌐 [WebSocketTranscription] Остановка сервиса...')
-    console.log('🌐 [WebSocketTranscription] Устанавливаем isActive = false (ручная остановка)')
-
     this.isActive = false
     this.isConnecting = false
 
@@ -337,15 +271,13 @@ export class WebSocketTranscriptionService {
       try {
         this.connection.finish()
       } catch (error) {
-        console.warn('🌐 [WebSocketTranscription] Ошибка при закрытии соединения:', error)
+        console.warn('WebSocket: Ошибка при закрытии соединения:', error)
       }
       this.connection = null
     }
 
     // Очищаем слушателей
     this.listeners = []
-
-    console.log('✅ [WebSocketTranscription] Сервис остановлен')
   }
 
   isConnected(): boolean {
