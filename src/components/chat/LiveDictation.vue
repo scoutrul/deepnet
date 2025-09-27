@@ -36,7 +36,7 @@
     <div class="px-6 py-6">
       <div :class="['overflow-y-auto rounded-lg border border-slate-200 bg-white', panelHeight]" ref="scrollArea">
         <div class="prose prose-sm max-w-none p-4 whitespace-pre-wrap">
-          <p class="leading-3 text-slate-800">
+          <p class="leading-4 text-slate-800">
             <span v-for="(chunk, idx) in completedChunks" :key="'c'+idx">
               <br v-if="chunk === '\n'" />
               <span v-else class="mr-1 text-slate-800">
@@ -47,9 +47,12 @@
                     'cursor-pointer select-none transition-all duration-200 px-1 py-0.5 rounded',
                     isWordSelected(word, idx, wordIdx) 
                       ? 'bg-green-200 text-green-800 underline font-medium' 
-                      : 'hover:bg-gray-100'
+                      : 'hover:bg-gray-100',
+                    isWordInMouseSelection(idx, wordIdx) ? 'bg-blue-100' : ''
                   ]"
-                  @click="toggleWordSelection(word, idx, wordIdx)"
+                  @mousedown="startMouseSelection(word, idx, wordIdx, $event)"
+                  @mouseup="endMouseSelection(word, idx, wordIdx, $event)"
+                  @mouseenter="handleMouseEnter(word, idx, wordIdx)"
                 >
                   {{ word }}
                 </span>
@@ -63,9 +66,12 @@
                   'cursor-pointer select-none transition-all duration-200 px-1 py-0.5 rounded',
                   isWordSelected(word, 'partial', wordIdx) 
                     ? 'bg-green-200 text-green-800 underline font-medium' 
-                    : 'hover:bg-gray-100'
+                    : 'hover:bg-gray-100',
+                  isWordInMouseSelection('partial', wordIdx) ? 'bg-blue-100' : ''
                 ]"
-                @click="toggleWordSelection(word, 'partial', wordIdx)"
+                @mousedown="startMouseSelection(word, 'partial', wordIdx, $event)"
+                @mouseup="endMouseSelection(word, 'partial', wordIdx, $event)"
+                @mouseenter="handleMouseEnter(word, 'partial', wordIdx)"
               >
                 {{ word }}
               </span>
@@ -113,10 +119,38 @@
         
         <button
           @click="sendQuery"
-          class="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          :disabled="isQueryLoading"
+          class="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
-          Отправить запрос
+          <span v-if="isQueryLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+          <span v-if="isQueryLoading">Отправка...</span>
+          <span v-else>Отправить запрос</span>
         </button>
+      </div>
+      
+      <!-- Вкладки ответов LLM -->
+      <LLMResponseTabs
+        v-if="llmResponses.length > 0"
+        :responses="llmResponses"
+        :selected-words="selectedWords"
+        @close-tab="closeLLMResponse"
+        @add-word="addWordFromResponse"
+        @remove-word="removeWord"
+        class="mt-4"
+      />
+      
+      <!-- Ошибка запроса -->
+      <div v-if="queryError" class="mt-4 p-3 bg-red-50 rounded-lg border border-red-200">
+        <div class="flex items-center gap-2">
+          <span class="text-red-600 text-sm">❌ Ошибка:</span>
+          <span class="text-red-700 text-sm">{{ queryError }}</span>
+          <button
+            @click="queryError = null"
+            class="ml-auto text-red-500 hover:text-red-700 text-xs"
+          >
+            ✕
+          </button>
+        </div>
       </div>
       
       <div class="mt-3 text-xs text-slate-500 flex items-center gap-3">
@@ -136,9 +170,14 @@
 <script>
 import { uiBusinessAdapter } from '../../adapters'
 import { websocketTranscriptionService } from '../../services/voice/websocketTranscriptionService'
+import { chatService } from '../../services/chat/chatService'
+import LLMResponseTabs from './LLMResponseTabs.vue'
 
 export default {
   name: 'LiveDictation',
+  components: {
+    LLMResponseTabs
+  },
   props: {
     adapter: {
       type: Object,
@@ -166,7 +205,23 @@ export default {
       
       // Выбор слов для поиска
       selectedWords: [],
-      wordIdCounter: 0
+      wordIdCounter: 0,
+      
+      // Выделение мышью
+      isMouseSelecting: false,
+      mouseSelectionStart: null,
+      mouseSelectionEnd: null,
+      
+      // LLM ответы
+      llmResponses: [], // Массив всех ответов LLM
+      activeResponseId: null, // ID активного ответа
+      isQueryLoading: false,
+      queryError: null,
+      
+      // Автоматический перезапуск
+      recognitionStartTime: null, // Время начала распознавания
+      recognitionTimeout: null, // Таймер для перезапуска
+      hasReceivedRecognition: false // Флаг получения первого распознавания
     }
   },
   computed: {
@@ -188,6 +243,12 @@ export default {
     }
   },
   beforeDestroy() {
+    // Очищаем таймер перезапуска
+    if (this.recognitionTimeout) {
+      clearTimeout(this.recognitionTimeout)
+      this.recognitionTimeout = null
+    }
+    
     // Остановка при размонтировании если активна
     if (this.isRecording) {
       this.stopDictation()
@@ -256,15 +317,253 @@ export default {
       this.selectedWords = []
     },
     
-    sendQuery() {
+    clearLLMResponse() {
+      this.llmResponses = []
+      this.activeResponseId = null
+      this.queryError = null
+    },
+    
+    closeLLMResponse(responseId) {
+      const index = this.llmResponses.findIndex(r => r.id === responseId)
+      if (index > -1) {
+        this.llmResponses.splice(index, 1)
+        
+        // Если закрываем активный ответ, переключаемся на другой
+        if (this.activeResponseId === responseId) {
+          if (this.llmResponses.length > 0) {
+            // Переключаемся на первую оставшуюся вкладку (новые в начале)
+            this.activeResponseId = this.llmResponses[0].id
+          } else {
+            this.activeResponseId = null
+          }
+        }
+      }
+    },
+    
+    addWordFromResponse(wordData) {
+      // Добавляем слово из ответа LLM
+      this.selectedWords.push({
+        id: ++this.wordIdCounter,
+        text: wordData.text,
+        source: wordData.source,
+        responseId: wordData.responseId,
+        lineIndex: wordData.lineIndex,
+        wordIndex: wordData.wordIndex
+      })
+    },
+    
+    // === Выделение мышью ===
+    startMouseSelection(word, chunkIndex, wordIndex, event) {
+      event.preventDefault()
+      this.isMouseSelecting = true
+      this.mouseSelectionStart = { word, chunkIndex, wordIndex }
+      this.mouseSelectionEnd = { word, chunkIndex, wordIndex }
+    },
+    
+    endMouseSelection(word, chunkIndex, wordIndex, event) {
+      if (!this.isMouseSelecting) return
+      
+      event.preventDefault()
+      this.mouseSelectionEnd = { word, chunkIndex, wordIndex }
+      
+      // Выделяем все слова в диапазоне
+      this.selectWordsInRange()
+      
+      // Сбрасываем состояние выделения
+      this.isMouseSelecting = false
+      this.mouseSelectionStart = null
+      this.mouseSelectionEnd = null
+    },
+    
+    handleMouseEnter(word, chunkIndex, wordIndex) {
+      if (this.isMouseSelecting) {
+        this.mouseSelectionEnd = { word, chunkIndex, wordIndex }
+      }
+    },
+    
+    isWordInMouseSelection(chunkIndex, wordIndex) {
+      if (!this.isMouseSelecting || !this.mouseSelectionStart || !this.mouseSelectionEnd) {
+        return false
+      }
+      
+      const start = this.mouseSelectionStart
+      const end = this.mouseSelectionEnd
+      
+      // Проверяем, находится ли слово в диапазоне выделения
+      return this.isWordInRange(chunkIndex, wordIndex, start, end)
+    },
+    
+    isWordInRange(chunkIndex, wordIndex, start, end) {
+      // Если слова в одном чанке
+      if (start.chunkIndex === end.chunkIndex && chunkIndex === start.chunkIndex) {
+        return wordIndex >= Math.min(start.wordIndex, end.wordIndex) && 
+               wordIndex <= Math.max(start.wordIndex, end.wordIndex)
+      }
+      
+      // Если слова в разных чанках, проверяем порядок
+      const currentPos = this.getWordPosition(chunkIndex, wordIndex)
+      const startPos = this.getWordPosition(start.chunkIndex, start.wordIndex)
+      const endPos = this.getWordPosition(end.chunkIndex, end.wordIndex)
+      
+      return currentPos >= Math.min(startPos, endPos) && currentPos <= Math.max(startPos, endPos)
+    },
+    
+    getWordPosition(chunkIndex, wordIndex) {
+      // Вычисляем абсолютную позицию слова в тексте
+      let position = 0
+      
+      for (let i = 0; i < this.completedChunks.length; i++) {
+        if (i === chunkIndex) {
+          const words = this.splitIntoWords(this.completedChunks[i])
+          return position + wordIndex
+        }
+        position += this.splitIntoWords(this.completedChunks[i]).length
+      }
+      
+      // Если это partial
+      if (chunkIndex === 'partial') {
+        for (let i = 0; i < this.completedChunks.length; i++) {
+          position += this.splitIntoWords(this.completedChunks[i]).length
+        }
+        return position + wordIndex
+      }
+      
+      return position
+    },
+    
+    selectWordsInRange() {
+      if (!this.mouseSelectionStart || !this.mouseSelectionEnd) return
+      
+      const start = this.mouseSelectionStart
+      const end = this.mouseSelectionEnd
+      
+      // Получаем все слова в диапазоне
+      const wordsInRange = this.getWordsInRange(start, end)
+      
+      // Добавляем слова в выделение (избегаем дубликатов)
+      wordsInRange.forEach(wordData => {
+        if (!this.isWordSelected(wordData.word, wordData.chunkIndex, wordData.wordIndex)) {
+          const newWord = {
+            id: ++this.wordIdCounter,
+            text: wordData.word,
+            chunkIndex: wordData.chunkIndex,
+            wordIndex: wordData.wordIndex
+          }
+          this.selectedWords.push(newWord)
+        }
+      })
+    },
+    
+    getWordsInRange(start, end) {
+      const words = []
+      
+      // Получаем все чанки в порядке
+      const allChunks = [...this.completedChunks]
+      if (this.currentPartial) {
+        allChunks.push(this.currentPartial)
+      }
+      
+      const startPos = this.getWordPosition(start.chunkIndex, start.wordIndex)
+      const endPos = this.getWordPosition(end.chunkIndex, end.wordIndex)
+      
+      let currentPos = 0
+      
+      for (let chunkIndex = 0; chunkIndex < allChunks.length; chunkIndex++) {
+        const chunk = allChunks[chunkIndex]
+        const chunkWords = this.splitIntoWords(chunk)
+        
+        for (let wordIndex = 0; wordIndex < chunkWords.length; wordIndex++) {
+          if (currentPos >= Math.min(startPos, endPos) && currentPos <= Math.max(startPos, endPos)) {
+            words.push({
+              word: chunkWords[wordIndex],
+              chunkIndex: chunkIndex === allChunks.length - 1 && this.currentPartial ? 'partial' : chunkIndex,
+              wordIndex
+            })
+          }
+          currentPos++
+        }
+      }
+      
+      return words
+    },
+    
+    async sendQuery() {
       const query = this.selectedWords.map(w => w.text).join(' ')
       console.log('🔍 Отправка запроса:', query)
       
-      // Пока только логируем, логика будет добавлена позже
-      alert(`Запрос отправлен: "${query}"`)
-      
-      // Очищаем выделение после отправки
-      this.clearSelectedWords()
+      try {
+        this.isQueryLoading = true
+        this.queryError = null
+        
+        // Получаем весь текст стенографии для контекста
+        const fullTranscript = this.completedChunks
+          .filter(chunk => chunk !== '\n')
+          .join(' ')
+          .trim()
+        
+        console.log('📝 Контекст стенографии:', fullTranscript.substring(0, 100) + '...')
+        
+        // Формируем системный промпт с контекстом стенографии
+        const systemPrompt = `Вы - эксперт по анализу и интерпретации стенографических записей разговоров.
+
+КОНТЕКСТ СТЕНОГРАФИИ:
+${fullTranscript}
+
+Это полная стенографическая запись разговора. Используйте этот контекст для понимания темы, тона и деталей обсуждения.
+
+Отвечайте на русском языке. Будьте конкретными и информативными.`
+
+        // Формируем пользовательский запрос
+        const userQuery = `Дай дополнительную информацию по этому запросу, учитывая контекст разговора: "${query}"`
+        
+        console.log('🤖 Отправка к LLM:', { userQuery: userQuery.substring(0, 100) + '...', systemPrompt: systemPrompt.substring(0, 100) + '...' })
+        
+        // Отправляем запрос к LLM
+        const result = await chatService.ask(userQuery, {
+          systemPrompt,
+          detailLevel: 'extended'
+        })
+        
+        console.log('📊 Результат LLM:', { isError: result.isError, isTimeout: result.isTimeout, hasContent: !!result.raw })
+        
+        if (result.isError) {
+          throw new Error('Ошибка при обращении к LLM')
+        }
+        
+        if (result.isTimeout) {
+          throw new Error('Превышено время ожидания ответа')
+        }
+        
+        // Создаем новый ответ с уникальным ID
+        const newResponse = {
+          id: `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          query,
+          response: result.raw,
+          timestamp: Date.now()
+        }
+        
+        // Добавляем в начало массива ответов (новые вкладки в начале)
+        this.llmResponses.unshift(newResponse)
+        
+        // Активируем новый ответ
+        this.activeResponseId = newResponse.id
+        
+        console.log('✅ Получен ответ от LLM:', result.raw)
+        
+        // Очищаем выделенные слова после успешной отправки
+        this.clearSelectedWords()
+        
+      } catch (error) {
+        console.error('❌ Ошибка отправки запроса:', error)
+        console.error('❌ Детали ошибки:', {
+          message: error.message,
+          stack: error.stack,
+          name: error.name
+        })
+        this.queryError = error.message || 'Неизвестная ошибка'
+      } finally {
+        this.isQueryLoading = false
+      }
     },
     
     async startDictation() {
@@ -272,9 +571,22 @@ export default {
         this.errorMessage = ''
         this.isInitializing = true
 
+        // Сбрасываем флаги для нового запуска
+        this.hasReceivedRecognition = false
+        this.recognitionStartTime = Date.now()
+        
+        // Очищаем предыдущий таймер если есть
+        if (this.recognitionTimeout) {
+          clearTimeout(this.recognitionTimeout)
+          this.recognitionTimeout = null
+        }
+
         await this.startWebSocketTranscription()
         this.isRecording = true
         this.$nextTick(() => this.scrollToBottom())
+        
+        // Запускаем таймер для проверки распознавания
+        this.startRecognitionTimeout()
         
       } catch (e) {
         this.errorMessage = 'Не удалось начать диктовку: ' + (e?.message || e)
@@ -286,10 +598,74 @@ export default {
     async stopDictation() {
       try {
         this.errorMessage = ''
+        
+        // Очищаем таймер перезапуска
+        if (this.recognitionTimeout) {
+          clearTimeout(this.recognitionTimeout)
+          this.recognitionTimeout = null
+        }
+        
+        // Сбрасываем флаги
+        this.hasReceivedRecognition = false
+        this.recognitionStartTime = null
+        
         await this.stopWebSocketTranscription()
         this.isRecording = false
       } catch (e) {
         this.errorMessage = 'Ошибка при остановке диктовки: ' + (e?.message || e)
+      }
+    },
+    
+    // === Автоматический перезапуск распознавания ===
+    startRecognitionTimeout() {
+      // Очищаем предыдущий таймер
+      if (this.recognitionTimeout) {
+        clearTimeout(this.recognitionTimeout)
+      }
+      
+      // Устанавливаем таймер на 5 секунд
+      this.recognitionTimeout = setTimeout(async () => {
+        if (this.isRecording && !this.hasReceivedRecognition) {
+          console.log('🔄 Перезапуск распознавания - не получено данных за 5 секунд')
+          await this.restartRecognition()
+        }
+      }, 5000)
+    },
+    
+    async restartRecognition() {
+      try {
+        console.log('🔄 Перезапускаем соединение...')
+        
+        // Останавливаем текущее соединение
+        await this.stopWebSocketTranscription()
+        
+        // Небольшая пауза перед перезапуском
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Перезапускаем
+        await this.startWebSocketTranscription()
+        
+        // Сбрасываем флаги и запускаем новый таймер
+        this.hasReceivedRecognition = false
+        this.recognitionStartTime = Date.now()
+        this.startRecognitionTimeout()
+        
+        console.log('✅ Соединение перезапущено')
+        
+      } catch (e) {
+        console.error('❌ Ошибка при перезапуске:', e)
+        this.errorMessage = 'Ошибка перезапуска: ' + (e?.message || e)
+      }
+    },
+    
+    onRecognitionReceived() {
+      // Отмечаем, что получили распознавание
+      this.hasReceivedRecognition = true
+      
+      // Очищаем таймер перезапуска
+      if (this.recognitionTimeout) {
+        clearTimeout(this.recognitionTimeout)
+        this.recognitionTimeout = null
       }
     },
     
@@ -311,6 +687,9 @@ export default {
         
         // Подписываемся на события распознавания
         this.websocketUnsubscribe = websocketTranscriptionService.onTranscription((chunk) => {
+          // Отмечаем, что получили распознавание
+          this.onRecognitionReceived()
+          
           // Преобразуем WebSocket чанк в формат TranscriptionChunk
           const transcriptionChunk = {
             id: chunk.id,

@@ -7,7 +7,7 @@ import type { ParsedResponse } from '@/types/ai'
 import { appConfig } from '../../config/appConfig'
 
 const MODEL = appConfig.llm.model || 'gpt-4o'
-const TIMEOUT_MS = appConfig.request.timeout || 5000
+const TIMEOUT_MS = appConfig.request.timeout || 30000
 const ANTHROPIC_API_KEY = appConfig.anthropic.apiKey || ''
 
 export const chatService = {
@@ -16,7 +16,12 @@ export const chatService = {
 		if (!appConfig.llm.model) {
 			throw new Error('Отсутствует VITE_CHAT_MODEL')
 		}
-		if (!appConfig.llm.baseUrl) {
+		
+		// Определяем тип провайдера
+		const isAnthropic = /^claude/i.test(MODEL)
+		
+		// Для Anthropic не нужен baseUrl, так как SDK сам знает адрес
+		if (!isAnthropic && !appConfig.llm.baseUrl) {
 			throw new Error('Отсутствует VITE_API_BASE_URL')
 		}
 		
@@ -44,7 +49,6 @@ export const chatService = {
 
 		// Выбор провайдера: Anthropic для моделей claude*, иначе OpenRouter
 		let provider: ChatProvider
-		const isAnthropic = /^claude/i.test(MODEL)
 		
 		// Проверяем переменные окружения для выбранного провайдера
 		if (isAnthropic) {

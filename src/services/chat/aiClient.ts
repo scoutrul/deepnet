@@ -50,7 +50,7 @@ export async function fetchCompletion(params: FetchCompletionParams): Promise<Fe
 				'X-Title': params.title || 'DeepNet Encyclopedia',
 			},
 			body: JSON.stringify({
-				model: `openai/${params.model}`,
+				model: `${params.model}`,
 				messages: msgs,
 				max_tokens: params.maxTokens ?? 800,
 				temperature: params.temperature ?? 0.5,

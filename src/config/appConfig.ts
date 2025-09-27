@@ -25,11 +25,11 @@ export const appConfig = {
     vad_events: true
   },
 
-  // LLM Configuration (OpenRouter)
+  // LLM Configuration (Anthropic)
   llm: {
-    apiKey: import.meta.env.VITE_OPENROUTER_API_KEY || localStorage.getItem('openrouter_api_key'),
-    baseUrl: import.meta.env.VITE_API_BASE_URL || 'https://openrouter.ai/api/v1',
-    model: import.meta.env.VITE_CHAT_MODEL || 'anthropic/claude-3.5-sonnet',
+    apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY || localStorage.getItem('anthropic_api_key'),
+    baseUrl: import.meta.env.VITE_API_BASE_URL || 'https://api.anthropic.com',
+    model: import.meta.env.VITE_CHAT_MODEL || 'claude-3-5-haiku-20241022',
     temperature: 0.7,
     maxTokens: 1000,
     topP: 0.9,
@@ -40,7 +40,7 @@ export const appConfig = {
   // Anthropic Configuration
   anthropic: {
     apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY || localStorage.getItem('anthropic_api_key'),
-    model: 'claude-3-5-sonnet-20241022',
+    model: 'claude-3-5-haiku-20241022', // Самая дешевая модель
     temperature: 0.7,
     maxTokens: 1000
   },
@@ -54,7 +54,7 @@ export const appConfig = {
 
   // Request Settings
   request: {
-    timeout: Number(import.meta.env.VITE_REQUEST_TIMEOUT_MS || 10000),
+    timeout: Number(import.meta.env.VITE_REQUEST_TIMEOUT_MS || 30000), // Увеличено до 30 секунд
     referrer: import.meta.env.VITE_HTTP_REFERRER || 'http://localhost:5173',
     title: import.meta.env.VITE_HTTP_TITLE || 'DeepNet Context System'
   },
