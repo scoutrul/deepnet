@@ -5,6 +5,7 @@ export interface BatchTranscriptionOptions {
   language?: string
   punctuate?: boolean
   smart_format?: boolean
+  diarize?: boolean
 }
 
 export interface BatchTranscriptionResult {
@@ -23,12 +24,14 @@ export async function transcribeBlobWithDeepgram(blob: Blob, options: BatchTrans
   const language = options.language || appConfig.deepgram.language || 'ru'
   const punctuate = options.punctuate ?? (appConfig.deepgram.punctuate === true)
   const smart_format = options.smart_format ?? (appConfig.deepgram.smart_format === true)
+  const diarize = options.diarize ?? false
 
   const params = new URLSearchParams()
   params.set('model', model)
   params.set('language', language)
   if (punctuate) params.set('punctuate', 'true')
   if (smart_format) params.set('smart_format', 'true')
+  if (diarize) params.set('diarize', 'true')
 
   const url = `https://api.deepgram.com/v1/listen?${params.toString()}`
 

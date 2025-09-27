@@ -44,7 +44,20 @@
         <span>
           {{ isRecording ? 'Диктовка активна' : 'Диктовка неактивна' }}
           <span v-if="!hasDeepGramKey" class="ml-2 text-amber-600">(DeepGram не настроен)</span>
-          <span v-if="useVAD && vadState" class="ml-2">
+          <span v-if="useDualMode && useWebSocket" class="ml-2">
+            • Режим: 🌐 WebSocket (реальное время)
+            <span v-if="transcriptionChunks.length" class="ml-1">
+              • Чанков: {{ transcriptionChunks.length }}
+            </span>
+            <span class="ml-1 text-green-600 font-medium">✓ АКТИВЕН</span>
+          </span>
+          <span v-else-if="useDualMode" class="ml-2">
+            • Режим: 🎭 Двухуровневый (⚡300мс + 🎯30с)
+            <span v-if="transcriptionChunks.length" class="ml-1">
+              • Чанков: {{ quickChunks.length }}⚡ + {{ qualityChunks.length }}🎯
+            </span>
+          </span>
+          <span v-else-if="useVAD && vadState" class="ml-2">
             • VAD: {{ vadState.isSpeaking ? '🎤 речь' : '🔇 тишина' }} 
             ({{ Math.round(vadState.currentVolume * 1000) }})
             <span v-if="vadState.hadSufficientPause && !vadState.isSpeaking" class="text-blue-600">✓ пауза</span>
@@ -62,6 +75,8 @@
 <script>
 import { uiBusinessAdapter } from '../../adapters'
 import { voiceActivityDetector } from '../../services/voice/voiceActivityDetector'
+import { dualTranscriptionService } from '../../services/voice/dualTranscriptionService'
+import { websocketTranscriptionService } from '../../services/voice/websocketTranscriptionService'
 import { appConfig } from '../../config/appConfig'
 
 export default {
@@ -102,7 +117,15 @@ export default {
       windowDurations: [1000, 3000, 5000, 10000],
       windowIndex: 0,
       windowStartTs: 0,
-      pendingBuffer: ''
+      pendingBuffer: '',
+      // Двухуровневое распознавание
+      useDualMode: true,
+      dualUnsubscribe: null,
+      transcriptionChunks: [],
+      
+      // Режимы подключения
+      useWebSocket: true, // true = WebSocket, false = HTTP POST
+      currentPartial: '', // Промежуточные результаты для WebSocket
     }
   },
   computed: {
@@ -120,6 +143,12 @@ export default {
       } catch (e) {
         return false
       }
+    },
+    quickChunks() {
+      return this.transcriptionChunks.filter(chunk => chunk.type === 'quick' && !chunk.isReplaced)
+    },
+    qualityChunks() {
+      return this.transcriptionChunks.filter(chunk => chunk.type === 'quality')
     }
   },
   watch: {
@@ -147,7 +176,17 @@ export default {
         this.errorMessage = ''
         this.isInitializing = true
 
-        if (this.batchMode) {
+        if (this.useDualMode && this.useWebSocket) {
+          await this.startWebSocketTranscription()
+          this.isRecording = true
+          this.$nextTick(() => this.scrollToBottom())
+          return
+        } else if (this.useDualMode) {
+          await this.startDualTranscription()
+          this.isRecording = true
+          this.$nextTick(() => this.scrollToBottom())
+          return
+        } else if (this.batchMode) {
           await this.startBatchRecording()
           this.isRecording = true
           this.$nextTick(() => this.scrollToBottom())
@@ -177,7 +216,15 @@ export default {
     async stopDictation() {
       try {
         this.errorMessage = ''
-        if (this.batchMode) {
+        if (this.useDualMode && this.useWebSocket) {
+          await this.stopWebSocketTranscription()
+          this.isRecording = false
+          return
+        } else if (this.useDualMode) {
+          await this.stopDualTranscription()
+          this.isRecording = false
+          return
+        } else if (this.batchMode) {
           await this.stopBatchRecording()
           this.isRecording = false
           return
@@ -188,6 +235,219 @@ export default {
       } catch (e) {
         this.errorMessage = 'Ошибка при остановке диктовки: ' + (e?.message || e)
       }
+    },
+    
+    // WebSocket распознавание
+    async startWebSocketTranscription() {
+      console.log('🌐 [LiveDictation] Запуск WebSocket распознавания')
+      
+      try {
+        // Получаем аудиопоток напрямую
+        console.log('🌐 [LiveDictation] Запрос доступа к микрофону...')
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: { 
+            echoCancellation: true, 
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000
+          } 
+        })
+        
+        if (!this.mediaStream) {
+          throw new Error('Не удалось получить аудиопоток')
+        }
+        
+        console.log('✅ [LiveDictation] Аудиопоток получен для WebSocket, треков:', this.mediaStream.getAudioTracks().length)
+        
+        // Подписываемся на события распознавания
+        this.dualUnsubscribe = websocketTranscriptionService.onTranscription((chunk) => {
+          console.log(`🌐 [LiveDictation] Получен WebSocket чанк:`, chunk.text, `(final: ${chunk.isFinal}, confidence: ${chunk.confidence.toFixed(2)})`)
+          
+          // Преобразуем WebSocket чанк в формат TranscriptionChunk
+          const transcriptionChunk = {
+            id: chunk.id,
+            text: chunk.text,
+            confidence: chunk.confidence,
+            timestamp: chunk.timestamp,
+            duration: 0, // WebSocket не предоставляет длительность
+            type: 'quick', // WebSocket чанки считаем быстрыми
+            isReplaced: false,
+            isFinal: chunk.isFinal
+          }
+          
+          // Добавляем только финальные чанки или обновляем последний
+          if (chunk.isFinal) {
+            this.transcriptionChunks.push(transcriptionChunk)
+            this.rebuildWebSocketTranscript()
+            this.$nextTick(() => this.scrollToBottom())
+          } else {
+            // Для промежуточных результатов обновляем currentPartial
+            this.currentPartial = chunk.text
+          }
+        })
+        
+        // Запускаем WebSocket сервис
+        console.log('🌐 [LiveDictation] Запуск WebSocket сервиса с медиапотоком...')
+        await websocketTranscriptionService.start(this.mediaStream)
+        
+        console.log('✅ [LiveDictation] WebSocket распознавание запущено')
+      } catch (error) {
+        console.error('❌ [LiveDictation] Ошибка запуска WebSocket распознавания:', error)
+        
+        // Более понятные сообщения об ошибках
+        if (error.name === 'NotAllowedError') {
+          throw new Error('Доступ к микрофону запрещен. Разрешите использование микрофона в настройках браузера.')
+        } else if (error.name === 'NotFoundError') {
+          throw new Error('Микрофон не найден. Подключите микрофон и попробуйте снова.')
+        } else if (error.name === 'NotReadableError') {
+          throw new Error('Микрофон занят другим приложением.')
+        } else if (error.message?.includes('Deepgram')) {
+          // Специальная обработка ошибок Deepgram
+          throw new Error(`Ошибка Deepgram: ${error.message}
+          
+Для настройки API ключа:
+1. Создайте файл .env в корне проекта
+2. Добавьте: VITE_DEEPGRAM_API_KEY=sk-ваш-ключ-здесь
+3. Или сохраните ключ в localStorage: deepgram_api_key`)
+        } else {
+          throw error
+        }
+      }
+    },
+    
+    async stopWebSocketTranscription() {
+      console.log('🌐 [LiveDictation] Остановка WebSocket распознавания')
+      
+      if (this.dualUnsubscribe) {
+        this.dualUnsubscribe()
+        this.dualUnsubscribe = null
+      }
+      
+      await websocketTranscriptionService.stop()
+      
+      // Останавливаем медиапоток
+      if (this.mediaStream) {
+        this.mediaStream.getTracks().forEach(track => track.stop())
+        this.mediaStream = null
+      }
+      
+      // Очищаем currentPartial
+      this.currentPartial = ''
+      
+      console.log('✅ [LiveDictation] WebSocket распознавание остановлено')
+    },
+    
+    rebuildWebSocketTranscript() {
+      // Строим итоговый текст из финальных чанков
+      this.completedChunks = []
+      
+      const finalChunks = this.transcriptionChunks
+        .filter(chunk => chunk.isFinal)
+        .sort((a, b) => a.timestamp - b.timestamp)
+      
+      for (const chunk of finalChunks) {
+        if (chunk.text.trim()) {
+          this.completedChunks.push(chunk.text.trim())
+          
+          // Добавляем параграфы между чанками
+          this.completedChunks.push('\n')
+          this.completedChunks.push('\n') // Двойной перенос = параграф
+        }
+      }
+      
+      console.log(`🌐 [LiveDictation] Обновлен WebSocket транскрипт: ${finalChunks.length} чанков, ${this.completedChunks.length} элементов`)
+    },
+    
+    // Двухуровневое распознавание
+    async startDualTranscription() {
+      console.log('🎭 [LiveDictation] Запуск двухуровневого распознавания')
+      
+      try {
+        // Получаем аудиопоток напрямую (как в batch режиме)
+        console.log('🎭 [LiveDictation] Запрос доступа к микрофону...')
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({ 
+          audio: { 
+            echoCancellation: true, 
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 48000
+          } 
+        })
+        
+        if (!this.mediaStream) {
+          throw new Error('Не удалось получить аудиопоток')
+        }
+        
+        console.log('✅ [LiveDictation] Аудиопоток получен, треков:', this.mediaStream.getAudioTracks().length)
+        
+        // Подписываемся на события распознавания
+        this.dualUnsubscribe = dualTranscriptionService.onTranscription((chunk) => {
+          console.log(`🎭 [LiveDictation] Получен ${chunk.type} чанк:`, chunk.text, `(${chunk.confidence.toFixed(2)})`)
+          
+          this.transcriptionChunks.push(chunk)
+          this.rebuildDualTranscript()
+          this.$nextTick(() => this.scrollToBottom())
+        })
+        
+        // Запускаем сервис
+        await dualTranscriptionService.start(this.mediaStream)
+        
+        console.log('✅ [LiveDictation] Двухуровневое распознавание запущено')
+      } catch (error) {
+        console.error('❌ [LiveDictation] Ошибка запуска двухуровневого распознавания:', error)
+        
+        // Более понятные сообщения об ошибках
+        if (error.name === 'NotAllowedError') {
+          throw new Error('Доступ к микрофону запрещен. Разрешите использование микрофона в настройках браузера.')
+        } else if (error.name === 'NotFoundError') {
+          throw new Error('Микрофон не найден. Подключите микрофон и попробуйте снова.')
+        } else if (error.name === 'NotReadableError') {
+          throw new Error('Микрофон занят другим приложением.')
+        } else {
+          throw error
+        }
+      }
+    },
+    
+    async stopDualTranscription() {
+      console.log('🎭 [LiveDictation] Остановка двухуровневого распознавания')
+      
+      if (this.dualUnsubscribe) {
+        this.dualUnsubscribe()
+        this.dualUnsubscribe = null
+      }
+      
+      await dualTranscriptionService.stop()
+      
+      // Останавливаем медиапоток
+      if (this.mediaStream) {
+        this.mediaStream.getTracks().forEach(track => track.stop())
+        this.mediaStream = null
+      }
+      
+      console.log('✅ [LiveDictation] Двухуровневое распознавание остановлено')
+    },
+    
+    rebuildDualTranscript() {
+      // Строим итоговый текст из активных чанков
+      this.completedChunks = []
+      
+      // Группируем чанки по времени и выбираем лучшие
+      const activeChunks = this.transcriptionChunks
+        .filter(chunk => !chunk.isReplaced)
+        .sort((a, b) => a.timestamp - b.timestamp)
+      
+      for (const chunk of activeChunks) {
+        if (chunk.text.trim()) {
+          this.completedChunks.push(chunk.text.trim())
+          
+          // Добавляем параграфы между всеми чанками для лучшей читаемости
+          this.completedChunks.push('\n')
+          this.completedChunks.push('\n') // Двойной перенос = параграф
+        }
+      }
+      
+      console.log(`🎭 [LiveDictation] Обновлен транскрипт: ${activeChunks.length} чанков, ${this.completedChunks.length} элементов`)
     },
 
     async startBatchRecording() {
@@ -239,6 +499,7 @@ export default {
             // Добавляем все результаты без фильтрации по confidence
             this.completedChunks.push(result.transcript)
             this.completedChunks.push('\n')
+            this.completedChunks.push('\n') // Двойной перенос = параграф
             this.$emit('use-in-chat', result.transcript)
             console.log(`✅ [LiveDictation] Добавлен текст: "${result.transcript}" (confidence: ${result.confidence})`)
             this.$nextTick(() => this.scrollToBottom())
@@ -365,6 +626,7 @@ export default {
       if (this.pendingBuffer && (elapsed >= currentWindow || hasPunctuation)) {
         this.completedChunks.push(this.pendingBuffer.trim())
         this.completedChunks.push('\n')
+        this.completedChunks.push('\n') // Двойной перенос = параграф
         this.$emit('use-in-chat', this.pendingBuffer.trim())
         this.pendingBuffer = ''
         this.windowStartTs = Date.now()
