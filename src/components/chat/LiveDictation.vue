@@ -36,19 +36,89 @@
     <div class="px-6 py-6">
       <div :class="['overflow-y-auto rounded-lg border border-slate-200 bg-white', panelHeight]" ref="scrollArea">
         <div class="prose prose-sm max-w-none p-4 whitespace-pre-wrap">
-          <p class="leading-7 text-slate-800">
+          <p class="leading-3 text-slate-800">
             <span v-for="(chunk, idx) in completedChunks" :key="'c'+idx">
               <br v-if="chunk === '\n'" />
-              <span v-else class="mr-1 text-slate-800">{{ chunk }}</span>
+              <span v-else class="mr-1 text-slate-800">
+                <span 
+                  v-for="(word, wordIdx) in splitIntoWords(chunk)" 
+                  :key="'w'+idx+'-'+wordIdx"
+                  :class="[
+                    'cursor-pointer select-none transition-all duration-200 px-1 py-0.5 rounded',
+                    isWordSelected(word, idx, wordIdx) 
+                      ? 'bg-green-200 text-green-800 underline font-medium' 
+                      : 'hover:bg-gray-100'
+                  ]"
+                  @click="toggleWordSelection(word, idx, wordIdx)"
+                >
+                  {{ word }}
+                </span>
+              </span>
             </span>
             <span v-if="currentPartial" class="text-slate-500">
-              {{ currentPartial }}
+              <span 
+                v-for="(word, wordIdx) in splitIntoWords(currentPartial)" 
+                :key="'partial-'+wordIdx"
+                :class="[
+                  'cursor-pointer select-none transition-all duration-200 px-1 py-0.5 rounded',
+                  isWordSelected(word, 'partial', wordIdx) 
+                    ? 'bg-green-200 text-green-800 underline font-medium' 
+                    : 'hover:bg-gray-100'
+                ]"
+                @click="toggleWordSelection(word, 'partial', wordIdx)"
+              >
+                {{ word }}
+              </span>
               <span class="ml-1 inline-block w-2 h-5 align-baseline bg-slate-400 animate-pulse"></span>
             </span>
             <span v-else-if="!completedChunks.length" class="text-slate-400">Говорите — текст появится здесь…</span>
           </p>
         </div>
       </div>
+      
+      <!-- Панель конструктора запроса -->
+      <div v-if="selectedWords.length > 0" class="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-medium text-slate-700">Конструктор запроса</h3>
+          <button
+            @click="clearSelectedWords"
+            class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded hover:bg-slate-200 transition-colors"
+          >
+            Очистить
+          </button>
+        </div>
+        
+        <div class="flex flex-wrap items-center gap-2 mb-3">
+          <span class="text-sm text-slate-600">Запрос:</span>
+          <div class="flex flex-wrap gap-1">
+            <span
+              v-for="(word, idx) in selectedWords"
+              :key="word.id"
+              class="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-sm rounded-full border border-green-200"
+            >
+              {{ word.text }}
+              <button
+                @click="removeWord(word.id)"
+                class="ml-1 text-green-600 hover:text-green-800 text-xs"
+              >
+                ×
+              </button>
+            </span>
+          </div>
+        </div>
+        
+        <div class="text-sm text-slate-600 mb-3">
+          <strong>Итоговый запрос:</strong> {{ selectedWords.map(w => w.text).join(' ') }}
+        </div>
+        
+        <button
+          @click="sendQuery"
+          class="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Отправить запрос
+        </button>
+      </div>
+      
       <div class="mt-3 text-xs text-slate-500 flex items-center gap-3">
         <span :class="['w-2 h-2 rounded-full', isRecording ? 'bg-green-500' : 'bg-slate-300']"></span>
         <span>
@@ -92,7 +162,11 @@ export default {
       currentPartial: '', // Промежуточные результаты
       
       // Результаты для отображения
-      completedChunks: []
+      completedChunks: [],
+      
+      // Выбор слов для поиска
+      selectedWords: [],
+      wordIdCounter: 0
     }
   },
   computed: {
@@ -133,6 +207,64 @@ export default {
       this.completedChunks = []
       this.transcriptionChunks = []
       this.currentPartial = ''
+      this.selectedWords = []
+    },
+    
+    // Методы для работы с выбором слов
+    splitIntoWords(text) {
+      if (!text) return []
+      return text.trim().split(/\s+/).filter(word => word.length > 0)
+    },
+    
+    isWordSelected(word, chunkIndex, wordIndex) {
+      return this.selectedWords.some(selected => 
+        selected.text === word && 
+        selected.chunkIndex === chunkIndex && 
+        selected.wordIndex === wordIndex
+      )
+    },
+    
+    toggleWordSelection(word, chunkIndex, wordIndex) {
+      const existingIndex = this.selectedWords.findIndex(selected => 
+        selected.text === word && 
+        selected.chunkIndex === chunkIndex && 
+        selected.wordIndex === wordIndex
+      )
+      
+      if (existingIndex > -1) {
+        // Удаляем слово при повторном клике
+        this.selectedWords.splice(existingIndex, 1)
+      } else {
+        // Добавляем слово
+        this.selectedWords.push({
+          id: ++this.wordIdCounter,
+          text: word,
+          chunkIndex,
+          wordIndex
+        })
+      }
+    },
+    
+    removeWord(wordId) {
+      const index = this.selectedWords.findIndex(word => word.id === wordId)
+      if (index > -1) {
+        this.selectedWords.splice(index, 1)
+      }
+    },
+    
+    clearSelectedWords() {
+      this.selectedWords = []
+    },
+    
+    sendQuery() {
+      const query = this.selectedWords.map(w => w.text).join(' ')
+      console.log('🔍 Отправка запроса:', query)
+      
+      // Пока только логируем, логика будет добавлена позже
+      alert(`Запрос отправлен: "${query}"`)
+      
+      // Очищаем выделение после отправки
+      this.clearSelectedWords()
     },
     
     async startDictation() {
