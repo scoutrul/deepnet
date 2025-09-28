@@ -277,7 +277,6 @@
 </template>
 
 <script>
-import { uiBusinessAdapter } from '../../adapters'
 import { websocketTranscriptionService } from '../../services/voice/websocketTranscriptionService'
 import { chatService } from '../../services/chat/chatService'
 import LLMResponseTabs from './LLMResponseTabs.vue'
@@ -288,10 +287,6 @@ export default {
     LLMResponseTabs
   },
   props: {
-    adapter: {
-      type: Object,
-      default: () => uiBusinessAdapter
-    },
     panelHeight: {
       type: String,
       default: 'h-64'

@@ -47,7 +47,7 @@ export const appConfig = {
 
   // Application Settings
   app: {
-    name: import.meta.env.VITE_APP_TITLE || 'DeepNet Context System',
+    name: import.meta.env.VITE_APP_TITLE || 'DeepNet Chat System',
     version: import.meta.env.VITE_APP_VERSION || '1.0.0',
     debug: import.meta.env.VITE_DEBUG === 'true' || false
   },
@@ -56,54 +56,7 @@ export const appConfig = {
   request: {
     timeout: Number(import.meta.env.VITE_REQUEST_TIMEOUT_MS || 30000), // Увеличено до 30 секунд
     referrer: import.meta.env.VITE_HTTP_REFERRER || 'http://localhost:5173',
-    title: import.meta.env.VITE_HTTP_TITLE || 'DeepNet Context System'
-  },
-
-  // Voice Recognition Settings
-  voice: {
-    // WebSocket режим использует настройки из deepgram секции
-    minWordLength: 3
-  },
-
-  // Context Settings
-  context: {
-    maxDialogEntries: 1000,
-    hintCacheTimeout: 300000, // 5 minutes
-    searchCacheTimeout: 600000, // 10 minutes
-    summaryCacheTimeout: 1800000 // 30 minutes
-  },
-
-  // UI Settings
-  ui: {
-    maxHints: 10,
-    maxSearchResults: 20,
-    animationDuration: 300,
-    debounceDelay: 500
-  },
-
-  // Features Configuration
-  features: {
-    diarization: true,
-    voiceRecognition: true,
-    contextHints: true,
-    search: true
-  },
-
-  // Diarization Settings
-  diarization: {
-    speakerColors: [
-      '#3B82F6', // blue-500
-      '#EF4444', // red-500
-      '#10B981', // emerald-500
-      '#F59E0B', // amber-500
-      '#8B5CF6', // violet-500
-      '#EC4899', // pink-500
-      '#06B6D4', // cyan-500
-      '#84CC16'  // lime-500
-    ],
-    mergeTimeout: 2000, // 2 секунды для объединения сегментов
-    maxSpeakers: 8,
-    segmentMinLength: 3
+    title: import.meta.env.VITE_HTTP_TITLE || 'DeepNet Chat System'
   }
 }
 

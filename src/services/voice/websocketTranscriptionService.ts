@@ -118,15 +118,15 @@ export class WebSocketTranscriptionService {
       this.handleTranscript(data)
     })
 
-    this.connection.on('Metadata', (data: any) => {
+    this.connection.on('Metadata', (_data: any) => {
       // Метаданные получены
     })
 
-    this.connection.on('UtteranceEnd', (data: any) => {
+    this.connection.on('UtteranceEnd', (_data: any) => {
       // Конец высказывания
     })
 
-    this.connection.on('SpeechStarted', (data: any) => {
+    this.connection.on('SpeechStarted', (_data: any) => {
       // Начало речи
     })
 
