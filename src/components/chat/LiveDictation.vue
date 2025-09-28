@@ -1,5 +1,5 @@
 <template>
-  <div class="live-dictation bg-white rounded-xl border border-slate-200 shadow-sm">
+  <div class="live-dictation bg-white rounded-xl border border-slate-200 shadow-sm mb-20">
     <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
       <h2 class="text-lg font-semibold text-gray-800">Живая диктовка</h2>
       <div class="flex items-center gap-3">
@@ -45,7 +45,7 @@
                   :key="'w'+idx+'-'+wordIdx"
                   :class="[
                     'cursor-pointer select-none transition-all duration-200 px-1 py-0.5 rounded',
-                    isWordSelected(word, idx, wordIdx) 
+                    isWordSelected(word, idx, wordIdx)  
                       ? 'bg-green-200 text-green-800 underline font-medium' 
                       : 'hover:bg-gray-100',
                     isWordInMouseSelection(idx, wordIdx) ? 'bg-blue-100' : ''
@@ -64,7 +64,7 @@
                 :key="'partial-'+wordIdx"
                 :class="[
                   'cursor-pointer select-none transition-all duration-200 px-1 py-0.5 rounded',
-                  isWordSelected(word, 'partial', wordIdx) 
+                  isWordSelected(word, 'partial', wordIdx)  
                     ? 'bg-green-200 text-green-800 underline font-medium' 
                     : 'hover:bg-gray-100',
                   isWordInMouseSelection('partial', wordIdx) ? 'bg-blue-100' : ''
@@ -82,49 +82,94 @@
         </div>
       </div>
       
-      <!-- Панель конструктора запроса -->
-      <div v-if="selectedWords.length > 0" class="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-medium text-slate-700">Конструктор запроса</h3>
+      <!-- Контекстные блоки -->
+      <div class="mt-4 space-y-3">
+        <!-- Контекст стороны А -->
+        <div class="bg-blue-50 rounded-lg border border-blue-200">
           <button
-            @click="clearSelectedWords"
-            class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded hover:bg-slate-200 transition-colors"
+            @click="toggleContextA"
+            class="w-full flex items-center justify-between p-3 text-left hover:bg-blue-100 transition-colors rounded-lg"
           >
-            Очистить
-          </button>
-        </div>
-        
-        <div class="flex flex-wrap items-center gap-2 mb-3">
-          <span class="text-sm text-slate-600">Запрос:</span>
-          <div class="flex flex-wrap gap-1">
-            <span
-              v-for="(word, idx) in selectedWords"
-              :key="word.id"
-              class="inline-flex items-center gap-1 px-2 py-1 bg-green-100 text-green-800 text-sm rounded-full border border-green-200"
-            >
-              {{ word.text }}
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-blue-800">Контекст стороны "А"</span>
+              <span v-if="contextA" class="text-xs text-blue-600 bg-blue-200 px-2 py-1 rounded">
+                {{ contextA.length }} символов
+              </span>
               <button
-                @click="removeWord(word.id)"
-                class="ml-1 text-green-600 hover:text-green-800 text-xs"
+                v-if="contextA"
+                @click.stop="clearContextA"
+                class="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+                title="Очистить контекст А"
               >
-                ×
+                Очистить
               </button>
-            </span>
+            </div>
+            <svg 
+              :class="['w-4 h-4 text-blue-600 transition-transform', isContextAExpanded ? 'rotate-180' : '']"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+          
+          <div v-if="isContextAExpanded" class="px-3 pb-3">
+            <textarea
+              v-model="contextA"
+              placeholder="Введите контекст стороны А (например, резюме, навыки, опыт работы)..."
+              class="w-full h-32 p-3 text-sm border border-blue-300 rounded-md resize-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            ></textarea>
           </div>
         </div>
         
-        <div class="text-sm text-slate-600 mb-3">
-          <strong>Итоговый запрос:</strong> {{ selectedWords.map(w => w.text).join(' ') }}
+        <!-- Контекст стороны Б -->
+        <div class="bg-green-50 rounded-lg border border-green-200">
+          <button
+            @click="toggleContextB"
+            class="w-full flex items-center justify-between p-3 text-left hover:bg-green-100 transition-colors rounded-lg"
+          >
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-medium text-green-800">Контекст стороны "Б"</span>
+              <span v-if="contextB" class="text-xs text-green-600 bg-green-200 px-2 py-1 rounded">
+                {{ contextB.length }} символов
+              </span>
+              <button
+                v-if="contextB"
+                @click.stop="clearContextB"
+                class="text-xs text-green-500 hover:text-green-700 px-2 py-1 rounded hover:bg-green-200 transition-colors"
+                title="Очистить контекст Б"
+              >
+                Очистить
+              </button>
+            </div>
+            <svg 
+              :class="['w-4 h-4 text-green-600 transition-transform', isContextBExpanded ? 'rotate-180' : '']"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+          
+          <div v-if="isContextBExpanded" class="px-3 pb-3">
+            <textarea
+              v-model="contextB"
+              placeholder="Введите контекст стороны Б (например, требования к позиции, компания, вопросы интервьюера)..."
+              class="w-full h-32 p-3 text-sm border border-green-300 rounded-md resize-none focus:ring-2 focus:ring-green-500 focus:border-green-500"
+            ></textarea>
+          </div>
         </div>
-        
+      </div>
+      
+      <!-- Кнопка очистки всех ответов LLM -->
+      <div v-if="llmResponses.length > 0" class="mt-4 flex justify-end">
         <button
-          @click="sendQuery"
-          :disabled="isQueryLoading"
-          class="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          @click="clearAllLLMResponses"
+          class="px-3 py-1 text-xs font-medium rounded-lg transition-all duration-200 flex items-center gap-1 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200"
+          title="Очистить все ответы LLM"
         >
-          <span v-if="isQueryLoading" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-          <span v-if="isQueryLoading">Отправка...</span>
-          <span v-else>Отправить запрос</span>
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+          </svg>
+          <span class="hidden sm:inline">Очистить все ответы</span>
         </button>
       </div>
       
@@ -133,6 +178,7 @@
         v-if="llmResponses.length > 0"
         :responses="llmResponses"
         :selected-words="selectedWords"
+        :active-response-id="activeResponseId"
         @close-tab="closeLLMResponse"
         @add-word="addWordFromResponse"
         @remove-word="removeWord"
@@ -162,6 +208,69 @@
       </div>
       <div v-if="errorMessage" class="mt-2 text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg border border-red-200">
         {{ errorMessage }}
+      </div>
+    </div>
+    
+    <!-- Фиксированный плавающий блок конструктора запросов -->
+    <div 
+      class="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-slate-200 shadow-lg"
+    >
+      <div class="max-w-4xl mx-auto p-3">
+        <div class="flex items-center gap-3">
+          <!-- Выбранные слова (компактно) -->
+          <div v-if="selectedWords.length > 0" class="flex items-center gap-1 flex-shrink-0">
+            <span class="text-xs text-slate-500">📝</span>
+            <div class="flex gap-1">
+              <span
+                v-for="(word, idx) in selectedWords.slice(0, 3)"
+                :key="word.id"
+                class="inline-flex items-center gap-1 px-1.5 py-0.5 bg-green-100 text-green-800 text-xs rounded border border-green-200"
+              >
+                {{ word.text }}
+                <button
+                  @click="removeWord(word.id)"
+                  class="ml-0.5 text-green-600 hover:text-green-800 text-xs"
+                >
+                  ×
+                </button>
+              </span>
+              <span v-if="selectedWords.length > 3" class="text-xs text-slate-500 px-1">
+                +{{ selectedWords.length - 3 }}
+              </span>
+            </div>
+          </div>
+          
+          <!-- Ручной ввод (адаптивно) -->
+          <div class="min-w-32">
+            <input
+              v-model="manualQuery"
+              type="text"
+              placeholder="Введите запрос..."
+              class="py-1 text-sm border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          
+          <!-- Кнопки -->
+          <div class="flex items-center gap-2 flex-shrink-0">
+            <button
+              v-if="selectedWords.length > 0 || manualQuery.length > 0"
+              @click="clearQueryConstructor"
+              class="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded hover:bg-slate-100 transition-colors"
+              title="Очистить"
+            >
+              🗑️
+            </button>
+            <button
+              @click="sendQuery"
+              :disabled="isQueryLoading || (!finalQuery.trim())"
+              class="px-3 py-1 bg-blue-500 text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+            >
+              <span v-if="isQueryLoading" class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              <span v-if="isQueryLoading">...</span>
+              <span v-else>Отправить</span>
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -221,7 +330,22 @@ export default {
       // Автоматический перезапуск
       recognitionStartTime: null, // Время начала распознавания
       recognitionTimeout: null, // Таймер для перезапуска
-      hasReceivedRecognition: false // Флаг получения первого распознавания
+      hasReceivedRecognition: false, // Флаг получения первого распознавания
+      
+      // Контекстные блоки
+      contextA: '', // Контекст стороны А
+      contextB: '', // Контекст стороны Б
+      isContextAExpanded: false, // Развернут ли блок А
+      isContextBExpanded: false, // Развернут ли блок Б
+      
+      // Дебаунсинг для сохранения
+      saveTimeout: null,
+      
+      // Кэш для проверки выделения слов
+      wordSelectionCache: null,
+      
+      // Ручной ввод запроса
+      manualQuery: ''
     }
   },
   computed: {
@@ -235,11 +359,58 @@ export default {
     },
     finalChunks() {
       return this.transcriptionChunks.filter(chunk => chunk.isFinal)
+    },
+    finalQuery() {
+      // Объединяем выбранные слова и ручной ввод
+      const selectedText = this.selectedWords.map(w => w.text).join(' ')
+      const manualText = this.manualQuery.trim()
+      
+      if (selectedText && manualText) {
+        return `${selectedText} ${manualText}`
+      } else if (selectedText) {
+        return selectedText
+      } else if (manualText) {
+        return manualText
+      }
+      return ''
     }
+  },
+  mounted() {
+    // Загружаем данные из localStorage при монтировании
+    this.loadFromLocalStorage()
   },
   watch: {
     completedChunks() {
       this.$nextTick(() => this.scrollToBottom())
+      // Сохраняем изменения в localStorage
+      this.saveToLocalStorage()
+    },
+    transcriptionChunks() {
+      // Сохраняем изменения в localStorage
+      this.saveToLocalStorage()
+    },
+    currentPartial() {
+      // Сохраняем изменения в localStorage
+      this.saveToLocalStorage()
+    },
+    contextA() {
+      // Сохраняем изменения в localStorage
+      this.saveToLocalStorage()
+    },
+    contextB() {
+      // Сохраняем изменения в localStorage
+      this.saveToLocalStorage()
+    },
+    llmResponses: {
+      handler() {
+        // Сохраняем изменения в localStorage
+        this.saveToLocalStorage()
+      },
+      deep: false // Не отслеживаем изменения внутри объектов
+    },
+    manualQuery() {
+      // Сохраняем изменения в localStorage
+      this.saveToLocalStorage()
     }
   },
   beforeDestroy() {
@@ -247,6 +418,12 @@ export default {
     if (this.recognitionTimeout) {
       clearTimeout(this.recognitionTimeout)
       this.recognitionTimeout = null
+    }
+    
+    // Очищаем таймер сохранения
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout)
+      this.saveTimeout = null
     }
     
     // Остановка при размонтировании если активна
@@ -264,11 +441,146 @@ export default {
     },
     
     clearChat() {
+      // Используем новый метод для полной очистки
+      this.clearAllData()
+    },
+    
+    // === Управление контекстными блоками ===
+    toggleContextA() {
+      this.isContextAExpanded = !this.isContextAExpanded
+    },
+    
+    toggleContextB() {
+      this.isContextBExpanded = !this.isContextBExpanded
+    },
+    
+    // === Сохранение в localStorage ===
+    saveToLocalStorage() {
+      // Дебаунсинг - сохраняем только если прошло время с последнего сохранения
+      if (this.saveTimeout) {
+        clearTimeout(this.saveTimeout)
+      }
+      
+      this.saveTimeout = setTimeout(() => {
+        try {
+          localStorage.setItem('liveDictation_contextA', this.contextA)
+          localStorage.setItem('liveDictation_contextB', this.contextB)
+          localStorage.setItem('liveDictation_completedChunks', JSON.stringify(this.completedChunks))
+          localStorage.setItem('liveDictation_transcriptionChunks', JSON.stringify(this.transcriptionChunks))
+          localStorage.setItem('liveDictation_currentPartial', this.currentPartial)
+          localStorage.setItem('liveDictation_llmResponses', JSON.stringify(this.llmResponses))
+          localStorage.setItem('liveDictation_manualQuery', this.manualQuery)
+        } catch (e) {
+          console.warn('Не удалось сохранить данные в localStorage:', e)
+        }
+      }, 100) // Сохраняем через 100мс после последнего изменения
+    },
+    
+    loadFromLocalStorage() {
+      try {
+        this.contextA = localStorage.getItem('liveDictation_contextA') || ''
+        this.contextB = localStorage.getItem('liveDictation_contextB') || ''
+        
+        const savedCompletedChunks = localStorage.getItem('liveDictation_completedChunks')
+        if (savedCompletedChunks) {
+          this.completedChunks = JSON.parse(savedCompletedChunks)
+        }
+        
+        const savedTranscriptionChunks = localStorage.getItem('liveDictation_transcriptionChunks')
+        if (savedTranscriptionChunks) {
+          this.transcriptionChunks = JSON.parse(savedTranscriptionChunks)
+        }
+        
+        this.currentPartial = localStorage.getItem('liveDictation_currentPartial') || ''
+        
+        const savedLLMResponses = localStorage.getItem('liveDictation_llmResponses')
+        if (savedLLMResponses) {
+          this.llmResponses = JSON.parse(savedLLMResponses)
+        }
+        
+        this.manualQuery = localStorage.getItem('liveDictation_manualQuery') || ''
+      } catch (e) {
+        console.warn('Не удалось загрузить данные из localStorage:', e)
+      }
+    },
+    
+    clearChat() {
+      // Очищаем только диалог чата, не трогая контекстные блоки
+      this.clearChatOnly()
+    },
+    
+    clearChatOnly() {
+      // Очищаем только данные чата
+      this.completedChunks = []
+      this.transcriptionChunks = []
+      this.currentPartial = ''
+      this.selectedWords = []
+      
+      // Очищаем только localStorage чата
+      try {
+        localStorage.removeItem('liveDictation_completedChunks')
+        localStorage.removeItem('liveDictation_transcriptionChunks')
+        localStorage.removeItem('liveDictation_currentPartial')
+      } catch (e) {
+        console.warn('Не удалось очистить localStorage чата:', e)
+      }
+    },
+    
+    clearContextA() {
+      this.contextA = ''
+      try {
+        localStorage.removeItem('liveDictation_contextA')
+      } catch (e) {
+        console.warn('Не удалось очистить localStorage для контекста А:', e)
+      }
+    },
+    
+    clearContextB() {
+      this.contextB = ''
+      try {
+        localStorage.removeItem('liveDictation_contextB')
+      } catch (e) {
+        console.warn('Не удалось очистить localStorage для контекста Б:', e)
+      }
+    },
+    
+    clearAllData() {
       // Очищаем все данные
       this.completedChunks = []
       this.transcriptionChunks = []
       this.currentPartial = ''
       this.selectedWords = []
+      this.contextA = ''
+      this.contextB = ''
+      this.llmResponses = []
+      this.activeResponseId = null
+      this.queryError = null
+      
+      // Очищаем localStorage
+      try {
+        localStorage.removeItem('liveDictation_contextA')
+        localStorage.removeItem('liveDictation_contextB')
+        localStorage.removeItem('liveDictation_completedChunks')
+        localStorage.removeItem('liveDictation_transcriptionChunks')
+        localStorage.removeItem('liveDictation_currentPartial')
+        localStorage.removeItem('liveDictation_llmResponses')
+      } catch (e) {
+        console.warn('Не удалось очистить localStorage:', e)
+      }
+    },
+    
+    clearAllLLMResponses() {
+      // Очищаем все ответы LLM
+      this.llmResponses = []
+      this.activeResponseId = null
+      this.queryError = null
+      
+      // Очищаем localStorage
+      try {
+        localStorage.removeItem('liveDictation_llmResponses')
+      } catch (e) {
+        console.warn('Не удалось очистить localStorage для ответов LLM:', e)
+      }
     },
     
     // Методы для работы с выбором слов
@@ -277,12 +589,40 @@ export default {
       return text.trim().split(/\s+/).filter(word => word.length > 0)
     },
     
-    isWordSelected(word, chunkIndex, wordIndex) {
-      return this.selectedWords.some(selected => 
-        selected.text === word && 
-        selected.chunkIndex === chunkIndex && 
-        selected.wordIndex === wordIndex
-      )
+    isWordSelected(word, chunkIndex, wordIndex, source, responseId, lineIndex) {
+      // Создаем ключ для кэширования
+      const key = source ? `${source}-${responseId}-${lineIndex}-${wordIndex}` : `${chunkIndex}-${wordIndex}`
+      
+      // Проверяем кэш
+      if (!this.wordSelectionCache) {
+        this.wordSelectionCache = new Map()
+      }
+      
+      if (this.wordSelectionCache.has(key)) {
+        return this.wordSelectionCache.get(key)
+      }
+      
+      const result = this.selectedWords.some(selected => {
+        // Для слов из чата
+        if (chunkIndex !== undefined && wordIndex !== undefined) {
+          return selected.text === word && 
+                 selected.chunkIndex === chunkIndex && 
+                 selected.wordIndex === wordIndex
+        }
+        // Для слов из ответов LLM
+        if (source && responseId !== undefined && lineIndex !== undefined) {
+          return selected.text === word && 
+                 selected.source === source && 
+                 selected.responseId === responseId && 
+                 selected.lineIndex === lineIndex &&
+                 selected.wordIndex === wordIndex
+        }
+        return false
+      })
+      
+      // Сохраняем в кэш
+      this.wordSelectionCache.set(key, result)
+      return result
     },
     
     toggleWordSelection(word, chunkIndex, wordIndex) {
@@ -304,17 +644,31 @@ export default {
           wordIndex
         })
       }
+      
+      // Очищаем кэш при изменении выделения
+      this.wordSelectionCache = null
     },
     
     removeWord(wordId) {
       const index = this.selectedWords.findIndex(word => word.id === wordId)
       if (index > -1) {
         this.selectedWords.splice(index, 1)
+        // Очищаем кэш при изменении выделения
+        this.wordSelectionCache = null
       }
     },
     
     clearSelectedWords() {
       this.selectedWords = []
+      // Очищаем кэш при изменении выделения
+      this.wordSelectionCache = null
+    },
+    
+    clearQueryConstructor() {
+      this.selectedWords = []
+      this.manualQuery = ''
+      // Очищаем кэш при изменении выделения
+      this.wordSelectionCache = null
     },
     
     clearLLMResponse() {
@@ -366,8 +720,18 @@ export default {
       event.preventDefault()
       this.mouseSelectionEnd = { word, chunkIndex, wordIndex }
       
-      // Выделяем все слова в диапазоне
-      this.selectWordsInRange()
+      // Проверяем, является ли это простым кликом (без перетаскивания)
+      const isSimpleClick = this.mouseSelectionStart && 
+        this.mouseSelectionStart.chunkIndex === this.mouseSelectionEnd.chunkIndex &&
+        this.mouseSelectionStart.wordIndex === this.mouseSelectionEnd.wordIndex
+      
+      if (isSimpleClick) {
+        // Простой клик - переключаем выделение слова
+        this.toggleWordSelection(word, chunkIndex, wordIndex)
+      } else {
+        // Выделение диапазона - выделяем все слова в диапазоне
+        this.selectWordsInRange()
+      }
       
       // Сбрасываем состояние выделения
       this.isMouseSelecting = false
@@ -488,12 +852,31 @@ export default {
     },
     
     async sendQuery() {
-      const query = this.selectedWords.map(w => w.text).join(' ')
+      const query = this.finalQuery
       console.log('🔍 Отправка запроса:', query)
+      
+      if (!query.trim()) {
+        console.warn('⚠️ Пустой запрос')
+        return
+      }
       
       try {
         this.isQueryLoading = true
         this.queryError = null
+        
+        // Создаем временный ответ для предварительной активации вкладки
+        const tempResponseId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        const tempResponse = {
+          id: tempResponseId,
+          query,
+          response: 'Загрузка...',
+          timestamp: Date.now(),
+          isLoading: true
+        }
+        
+        // Добавляем временный ответ в начало и активируем его
+        this.llmResponses.unshift(tempResponse)
+        this.activeResponseId = tempResponseId
         
         // Получаем весь текст стенографии для контекста
         const fullTranscript = this.completedChunks
@@ -504,17 +887,23 @@ export default {
         console.log('📝 Контекст стенографии:', fullTranscript.substring(0, 100) + '...')
         
         // Формируем системный промпт с контекстом стенографии
-        const systemPrompt = `Вы - эксперт по анализу и интерпретации стенографических записей разговоров.
+        const systemPrompt = `Вы - эксперт по прохождению собеседований, помогаете стороне "А" пройти собеседование против стороны "Б".
 
-КОНТЕКСТ СТЕНОГРАФИИ:
+${this.contextA ? `КОНТЕКСТ СТОРОНЫ "А":
+${this.contextA}
+
+` : ''}${this.contextB ? `КОНТЕКСТ СТОРОНЫ "Б":
+${this.contextB}
+
+` : ''}Цель: эффективно пройти собеседование, получить работу. Помогать подсказками и рекомендациями в соответствии с контекстом стороны "А" и "Б" и текущего диалога. Давать подсказки по запросу, а также прикладывать список смежных тем и навыков для раскрытия темы.
+
+КОНТЕКСТ ДИАЛОГА:
 ${fullTranscript}
-
-Это полная стенографическая запись разговора. Используйте этот контекст для понимания темы, тона и деталей обсуждения.
-
-Отвечайте на русском языке. Будьте конкретными и информативными.`
+`
 
         // Формируем пользовательский запрос
-        const userQuery = `Дай дополнительную информацию по этому запросу, учитывая контекст разговора: "${query}"`
+        const userQuery = `Дай дополнительную информацию по этому запросу, учитывая контекст разговора: "${query}" и контекст стороны "А" и "Б". 
+Отвечайте на русском языке. Будьте конкретными и информативными. Стараться отвечать кратко и понятно так, как этого требует ситуация и вопросы собеседника. БЕЗ обсуждений, только ответы на вопросы и список ключевых фраз по текущему вопросу не менее 10 штук через запятую.`
         
         console.log('🤖 Отправка к LLM:', { userQuery: userQuery.substring(0, 100) + '...', systemPrompt: systemPrompt.substring(0, 100) + '...' })
         
@@ -534,24 +923,28 @@ ${fullTranscript}
           throw new Error('Превышено время ожидания ответа')
         }
         
-        // Создаем новый ответ с уникальным ID
-        const newResponse = {
-          id: `response_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        // Заменяем временный ответ на финальный
+        const finalResponse = {
+          id: tempResponseId, // Используем тот же ID
           query,
           response: result.raw,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          isLoading: false
         }
         
-        // Добавляем в начало массива ответов (новые вкладки в начале)
-        this.llmResponses.unshift(newResponse)
+        // Находим и заменяем временный ответ
+        const tempIndex = this.llmResponses.findIndex(r => r.id === tempResponseId)
+        if (tempIndex !== -1) {
+          this.llmResponses.splice(tempIndex, 1, finalResponse)
+        }
         
-        // Активируем новый ответ
-        this.activeResponseId = newResponse.id
+        // Активируем финальный ответ (ID уже установлен)
+        this.activeResponseId = tempResponseId
         
         console.log('✅ Получен ответ от LLM:', result.raw)
         
-        // Очищаем выделенные слова после успешной отправки
-        this.clearSelectedWords()
+        // Очищаем конструктор запроса после успешной отправки
+        this.clearQueryConstructor()
         
       } catch (error) {
         console.error('❌ Ошибка отправки запроса:', error)
@@ -561,6 +954,16 @@ ${fullTranscript}
           name: error.name
         })
         this.queryError = error.message || 'Неизвестная ошибка'
+        
+        // Удаляем временный ответ при ошибке
+        const tempIndex = this.llmResponses.findIndex(r => r.id === tempResponseId)
+        if (tempIndex !== -1) {
+          this.llmResponses.splice(tempIndex, 1)
+          // Если удаляли активную вкладку, переключаемся на другую
+          if (this.activeResponseId === tempResponseId) {
+            this.activeResponseId = this.llmResponses.length > 0 ? this.llmResponses[0].id : null
+          }
+        }
       } finally {
         this.isQueryLoading = false
       }
@@ -704,9 +1107,20 @@ ${fullTranscript}
           
           // Добавляем только финальные чанки или обновляем последний
           if (chunk.isFinal) {
-            this.transcriptionChunks.push(transcriptionChunk)
-            this.rebuildWebSocketTranscript()
-            this.$nextTick(() => this.scrollToBottom())
+            // Проверяем, нет ли уже такого чанка (по ID или тексту)
+            const existingChunk = this.transcriptionChunks.find(existing => 
+              existing.id === transcriptionChunk.id || 
+              (existing.text === transcriptionChunk.text && existing.timestamp === transcriptionChunk.timestamp)
+            )
+            
+            if (!existingChunk) {
+              console.log('✅ Добавляем новый чанк:', transcriptionChunk.text.substring(0, 50) + '...')
+              this.transcriptionChunks.push(transcriptionChunk)
+              this.rebuildWebSocketTranscript()
+              this.$nextTick(() => this.scrollToBottom())
+            } else {
+              console.log('⚠️ Пропускаем дубликат чанка:', transcriptionChunk.text.substring(0, 50) + '...')
+            }
           } else {
             // Для промежуточных результатов обновляем currentPartial
             this.currentPartial = chunk.text
@@ -765,9 +1179,14 @@ ${fullTranscript}
         .filter(chunk => chunk.isFinal)
         .sort((a, b) => a.timestamp - b.timestamp)
       
+      // Используем Set для отслеживания уникальных текстов
+      const seenTexts = new Set()
+      
       for (const chunk of finalChunks) {
-        if (chunk.text.trim()) {
-          this.completedChunks.push(chunk.text.trim())
+        const text = chunk.text.trim()
+        if (text && !seenTexts.has(text)) {
+          seenTexts.add(text)
+          this.completedChunks.push(text)
           
           // Добавляем параграфы между чанками
           this.completedChunks.push('\n')

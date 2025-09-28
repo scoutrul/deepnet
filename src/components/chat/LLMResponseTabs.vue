@@ -50,7 +50,14 @@
       
       <!-- Ответ с возможностью выбора слов -->
       <div class="prose prose-sm max-w-none text-slate-800">
-        <div class="whitespace-pre-wrap">
+        <div v-if="activeResponse.isLoading" class="flex items-center gap-2 text-slate-500">
+          <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+          <span>Загрузка ответа...</span>
+        </div>
+        
+        <div v-else class="whitespace-pre-wrap">
           <div 
             v-for="(line, lineIdx) in splitIntoLines(activeResponse.response)" 
             :key="'line-'+activeResponse.id+'-'+lineIdx"
@@ -99,6 +106,10 @@ export default {
     selectedWords: {
       type: Array,
       default: () => []
+    },
+    activeResponseId: {
+      type: String,
+      default: null
     }
   },
   data() {
@@ -119,9 +130,22 @@ export default {
   watch: {
     responses: {
       handler(newResponses) {
-        // Автоматически активируем первый ответ (новые вкладки в начале)
-        if (newResponses.length > 0 && !this.activeTabId) {
+        // Если передан activeResponseId, используем его
+        if (this.activeResponseId && newResponses.some(r => r.id === this.activeResponseId)) {
+          this.activeTabId = this.activeResponseId
+        }
+        // Иначе автоматически активируем первый ответ (новые вкладки в начале)
+        else if (newResponses.length > 0 && !this.activeTabId) {
           this.activeTabId = newResponses[0].id
+        }
+      },
+      immediate: true
+    },
+    activeResponseId: {
+      handler(newActiveId) {
+        // Обновляем активную вкладку при изменении activeResponseId
+        if (newActiveId && this.responses.some(r => r.id === newActiveId)) {
+          this.activeTabId = newActiveId
         }
       },
       immediate: true
@@ -217,8 +241,20 @@ export default {
       event.preventDefault()
       this.mouseSelectionEnd = { word, source, responseId, lineIndex, wordIndex }
       
-      // Выделяем все слова в диапазоне
-      this.selectWordsInRange()
+      // Проверяем, является ли это простым кликом (без перетаскивания)
+      const isSimpleClick = this.mouseSelectionStart && 
+        this.mouseSelectionStart.source === this.mouseSelectionEnd.source &&
+        this.mouseSelectionStart.responseId === this.mouseSelectionEnd.responseId &&
+        this.mouseSelectionStart.lineIndex === this.mouseSelectionEnd.lineIndex &&
+        this.mouseSelectionStart.wordIndex === this.mouseSelectionEnd.wordIndex
+      
+      if (isSimpleClick) {
+        // Простой клик - переключаем выделение слова
+        this.toggleWordSelection(word, source, responseId, lineIndex, wordIndex)
+      } else {
+        // Выделение диапазона - выделяем все слова в диапазоне
+        this.selectWordsInRange()
+      }
       
       // Сбрасываем состояние выделения
       this.isMouseSelecting = false
