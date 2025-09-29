@@ -21,7 +21,7 @@ class AnthropicProvider implements ChatProvider {
         model: params.model,
         max_tokens: params.maxTokens ?? 800,
         temperature: params.temperature ?? 0.5,
-        system: params.systemPrompt,
+        system: params.systemPrompt?.trim() || undefined,
         messages: msgs,
       }) as any
 
